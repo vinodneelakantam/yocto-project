@@ -1,0 +1,16 @@
+# Yocto build outputs
+build/
+out/
+.tmp/
+.local/
+
+# Upstream source trees (keep local; do not commit)
+sources/
+
+# Editor and system
+.vscode/
+.DS_Store
+
+# Python cache
+__pycache__/
+*.pyc

@@ -1,0 +1,5 @@
+Security baseline placeholders:
+- disable unused services
+- enforce ssh key-based auth
+- enable audit logging policy
+- review kernel hardening flags per BSP

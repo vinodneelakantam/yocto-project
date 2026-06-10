@@ -1,0 +1,66 @@
+name: Remote Yocto Build
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+    inputs:
+      image:
+        description: "BitBake image target"
+        required: false
+        default: "core-image-minimal"
+      clean:
+        description: "Run bitbake -c cleansstate before build"
+        required: false
+        default: "false"
+
+jobs:
+  orchestrate-remote-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      IMAGE_TARGET: ${{ github.event.inputs.image || 'core-image-minimal' }}
+      CLEAN_BUILD: ${{ github.event.inputs.clean || 'false' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "${{ secrets.VPS_PORT || 22 }}" "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Sync repository to VPS
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEST="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ secrets.VPS_BUILD_ROOT || '~/yocto-project' }}"
+          rsync -az --delete --exclude='.git' ./ "$DEST/"
+
+      - name: Execute remote Yocto build
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -p "${{ secrets.VPS_PORT || 22 }}" "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
+            "cd '${{ secrets.VPS_BUILD_ROOT || '~/yocto-project' }}' && \
+             chmod +x scripts/remote-build.sh && \
+             scripts/remote-build.sh '$IMAGE_TARGET' '$CLEAN_BUILD'"
+
+      - name: Collect artifacts from VPS
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          scp -P "${{ secrets.VPS_PORT || 22 }}" -r \
+            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ secrets.VPS_BUILD_ROOT || '~/yocto-project' }}/out/." artifacts/
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: yocto-images-${{ github.run_number }}
+          path: artifacts
+          if-no-files-found: error

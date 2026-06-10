@@ -1,0 +1,18 @@
+# Example Yocto bblayers.conf
+# Copy into your build/conf/bblayers.conf.
+# This file includes real paths for local custom layers in this repository.
+
+YOCTO_PROJECT_ROOT ?= "/home/uic27619/Working/yocto"
+POKY_ROOT ?= "${YOCTO_PROJECT_ROOT}/sources/poky"
+META_OE_ROOT ?= "${YOCTO_PROJECT_ROOT}/sources/meta-openembedded"
+
+BBLAYERS ?= " \
+  ${POKY_ROOT}/meta \
+  ${POKY_ROOT}/meta-poky \
+  ${POKY_ROOT}/meta-yocto-bsp \
+  ${META_OE_ROOT}/meta-oe \
+  ${META_OE_ROOT}/meta-python \
+  ${YOCTO_PROJECT_ROOT}/layers/meta-portfolio \
+  ${YOCTO_PROJECT_ROOT}/layers/meta-security \
+  ${YOCTO_PROJECT_ROOT}/layers/meta-ota \
+"
