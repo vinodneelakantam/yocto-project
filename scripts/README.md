@@ -4,12 +4,14 @@
 - `github/create-repo.sh`: Creates a GitHub repo from this directory and pushes it
 - `github/set-secrets.sh`: Configures required GitHub Actions secrets via `gh`
 - `github/run-workflow-once.sh`: Triggers `remote-yocto-build.yml` once and watches it
+- `github/install-gh-from-github.sh`: Downloads `gh` from official GitHub Releases into `.tmp/`, verifies checksum, and installs to `.local/bin/gh`
 
 ## Notes
 
 - Script expects `sources/poky/oe-init-build-env` on VPS
 - Ensure submodules are initialized before running remote builds
 - Use GitHub Actions workflow to call this script over SSH
+- If `gh` is not installed system-wide, scripts auto-bootstrap it from GitHub release packages
 
 ## GitHub Setup Automation
 

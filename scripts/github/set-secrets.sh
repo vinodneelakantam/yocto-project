@@ -18,6 +18,8 @@ if [[ -z "$GH_BIN" ]]; then
     GH_BIN="$(command -v gh)"
   elif [[ -x "./.local/bin/gh" ]]; then
     GH_BIN="./.local/bin/gh"
+  elif [[ -x "./scripts/github/install-gh-from-github.sh" ]]; then
+    GH_BIN="$(./scripts/github/install-gh-from-github.sh)"
   else
     echo "GitHub CLI (gh) is required but not found."
     exit 1
