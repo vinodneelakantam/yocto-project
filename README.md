@@ -13,13 +13,38 @@ This repository implements a GitHub-first workflow for Yocto development:
 - `docs/`: Architecture, security, OTA, and operations notes
 - `.github/workflows/`: CI workflows that orchestrate remote builds
 
-## How It Works
+## What This Repository Does (Detailed)
 
-1. Developer pushes changes to GitHub.
-2. GitHub Actions starts the orchestration workflow.
-3. Workflow connects to VPS over SSH.
-4. VPS runs Yocto build with BitBake.
-5. Build artifacts are uploaded back to GitHub.
+This repository is a **Yocto build orchestrator**, not a full mirror of upstream Yocto source trees.
+
+### Primary responsibilities
+
+- Keep upstream Yocto sources in `sources/` as **Git submodules** (pinned to known commits)
+- Store project-specific layers in `layers/`
+- Provide reusable build configuration templates in `conf/`
+- Automate remote builds using GitHub Actions and VPS execution scripts
+- Return build outputs to GitHub as downloadable workflow artifacts
+
+### End-to-end workflow
+
+1. A change is pushed to `main` (or the workflow is started manually).
+2. GitHub Actions checks out this repo with submodules recursively.
+3. CI prepares SSH credentials (`VPS_SSH_KEY`) and host trust.
+4. Repository contents are synced to a VPS build directory.
+5. `scripts/remote-build.sh` runs BitBake on the VPS.
+6. Built images/logs from `out/` are copied back and uploaded as artifacts.
+
+### Why submodules are used
+
+- You keep a clean history of local project changes.
+- Upstream layer provenance remains explicit.
+- Updating upstream code is intentional and reviewable via submodule commit changes.
+
+### What this repo is not
+
+- Not a fork of `yoctoproject/poky`
+- Not a mirror of `openembedded/meta-openembedded`
+- Not intended to store all upstream source history directly in this repository
 
 ## Quick Start
 
