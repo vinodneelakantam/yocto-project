@@ -1,6 +1,7 @@
 # Example Yocto bblayers.conf
 # Copy into your build/conf/bblayers.conf.
 # This file includes real paths for local custom layers in this repository.
+# Expected source roots are tracked as git submodules under sources/.
 
 YOCTO_PROJECT_ROOT ?= "/home/uic27619/Working/yocto"
 POKY_ROOT ?= "${YOCTO_PROJECT_ROOT}/sources/poky"

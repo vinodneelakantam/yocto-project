@@ -7,7 +7,8 @@
 
 ## Notes
 
-- Script expects `oe-init-build-env` at repo root on VPS
+- Script expects `sources/poky/oe-init-build-env` on VPS
+- Ensure submodules are initialized before running remote builds
 - Use GitHub Actions workflow to call this script over SSH
 
 ## GitHub Setup Automation
@@ -24,6 +25,7 @@ export VPS_BUILD_ROOT="~/yocto-project" # optional
 
 ./scripts/github/set-secrets.sh
 ./scripts/github/run-workflow-once.sh
+```
 
 If you do not have a repo yet:
 
@@ -31,5 +33,4 @@ If you do not have a repo yet:
 export GH_REPO_NAME="yocto-project"
 export GH_VISIBILITY="public"
 ./scripts/github/create-repo.sh
-```
 ```

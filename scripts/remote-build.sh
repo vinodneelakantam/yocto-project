@@ -6,17 +6,19 @@ CLEAN_BUILD="${2:-false}"
 BUILD_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_DIR="$BUILD_ROOT/out"
 YOCTO_BUILD_DIR="$BUILD_ROOT/build"
+POKY_INIT_SCRIPT="$BUILD_ROOT/sources/poky/oe-init-build-env"
 
 mkdir -p "$OUT_DIR"
 
-if [[ ! -f "$BUILD_ROOT/oe-init-build-env" ]]; then
-  echo "Missing oe-init-build-env in $BUILD_ROOT"
-  echo "Clone or mount your Yocto tree so oe-init-build-env is available."
+if [[ ! -f "$POKY_INIT_SCRIPT" ]]; then
+  echo "Missing poky init script: $POKY_INIT_SCRIPT"
+  echo "Initialize source submodules before building:"
+  echo "  git submodule update --init --recursive"
   exit 1
 fi
 
 # shellcheck disable=SC1091
-source "$BUILD_ROOT/oe-init-build-env" "$YOCTO_BUILD_DIR" >/dev/null
+source "$POKY_INIT_SCRIPT" "$YOCTO_BUILD_DIR" >/dev/null
 
 if [[ "$CLEAN_BUILD" == "true" ]]; then
   bitbake -c cleansstate "$IMAGE_TARGET"

@@ -81,7 +81,8 @@ apt install git build-essential python3 -y
 
 git clone <repo>
 cd <repo>
-source oe-init-build-env
+git submodule update --init --recursive
+source sources/poky/oe-init-build-env
 bitbake core-image-minimal
 ```
 

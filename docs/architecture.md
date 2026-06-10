@@ -23,6 +23,7 @@
 ## Failure Domains
 
 - SSH connectivity to VPS
-- Missing Yocto setup (`oe-init-build-env`) on remote host
+- Missing source submodules (`sources/poky`, `sources/meta-openembedded`) on remote host
+- Missing Yocto setup script (`sources/poky/oe-init-build-env`) on remote host
 - Build resource limits on VPS (RAM/storage)
 - Artifact transfer issues (scp/rsync)

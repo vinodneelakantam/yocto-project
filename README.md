@@ -23,16 +23,33 @@ This repository implements a GitHub-first workflow for Yocto development:
 
 ## Quick Start
 
-1. Populate Yocto config templates:
+1. Clone with source submodules:
+
+```bash
+git clone --recurse-submodules https://github.com/<owner>/<repo>.git
+cd <repo>
+```
+
+If already cloned without submodules:
+
+```bash
+git submodule update --init --recursive
+```
+
+2. Populate Yocto config templates:
 - Copy `conf/local.conf.example` to your Yocto build directory
 - Copy `conf/bblayers.conf.example` and adjust layer paths
 
-2. Local layers included in this repository:
+3. Source repositories tracked as submodules:
+- `sources/poky` (`yoctoproject/poky`, branch `scarthgap`)
+- `sources/meta-openembedded` (`openembedded/meta-openembedded`, branch `scarthgap`)
+
+4. Local layers included in this repository:
 - `layers/meta-portfolio`
 - `layers/meta-security`
 - `layers/meta-ota`
 
-3. Configure GitHub repository secrets:
+5. Configure GitHub repository secrets:
 - `VPS_HOST`
 - `VPS_USER`
 - `VPS_SSH_KEY`
@@ -49,7 +66,7 @@ export VPS_SSH_KEY="$(cat ~/.ssh/id_ed25519)"
 ./scripts/github/set-secrets.sh
 ```
 
-4. Trigger a remote build:
+6. Trigger a remote build:
 - Push to `main`, or
 - Run workflow `Remote Yocto Build` manually from Actions tab
 
