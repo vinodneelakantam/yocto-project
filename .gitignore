@@ -4,8 +4,11 @@ out/
 .tmp/
 .local/
 
-# Upstream source trees (keep local; do not commit)
-sources/
+# Upstream source trees
+# Track selected upstreams as submodules; keep other source dirs local.
+sources/*
+!sources/poky/
+!sources/meta-openembedded/
 
 # Editor and system
 .vscode/
