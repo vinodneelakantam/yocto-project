@@ -30,6 +30,21 @@ jobs:
           # Required so pinned Yocto sources in sources/ are available.
           submodules: recursive
 
+      - name: Resolve SSH port
+        shell: bash
+        run: |
+          set -euo pipefail
+          PORT="${{ secrets.VPS_PORT }}"
+          PORT="${PORT//[[:space:]]/}"
+          if [[ -z "$PORT" ]]; then
+            PORT=22
+          fi
+          if ! [[ "$PORT" =~ ^[0-9]+$ ]] || (( PORT < 1 || PORT > 65535 )); then
+            echo "VPS_PORT must be a numeric SSH port between 1 and 65535."
+            exit 1
+          fi
+          echo "VPS_PORT=$PORT" >> "$GITHUB_ENV"
+
       - name: Prepare SSH
         shell: bash
         run: |
@@ -40,7 +55,7 @@ jobs:
           printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           # Preload host key to avoid interactive trust prompt in CI.
-          ssh-keyscan -p "${{ secrets.VPS_PORT || 22 }}" "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
+          ssh-keyscan -p "$VPS_PORT" "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
 
       - name: Sync repository to VPS
         shell: bash
@@ -50,14 +65,14 @@ jobs:
           DEST="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ secrets.VPS_BUILD_ROOT || '~/yocto-project' }}"
           # Mirror workspace content to VPS and remove stale files from previous runs.
           # Excluding .git keeps transfer lighter and avoids nested git metadata on VPS.
-          rsync -az --delete --exclude='.git' ./ "$DEST/"
+          rsync -az --delete --exclude='.git' -e "ssh -p $VPS_PORT" ./ "$DEST/"
 
       - name: Execute remote Yocto build
         shell: bash
         run: |
           set -euo pipefail
           # Execute build on VPS where Yocto has enough CPU/RAM/disk.
-          ssh -p "${{ secrets.VPS_PORT || 22 }}" "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
+          ssh -p "$VPS_PORT" "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
             "cd '${{ secrets.VPS_BUILD_ROOT || '~/yocto-project' }}' && \
              chmod +x scripts/remote-build.sh && \
              scripts/remote-build.sh '$IMAGE_TARGET' '$CLEAN_BUILD'"
@@ -69,7 +84,7 @@ jobs:
           # Local staging directory on runner for upload-artifact input.
           mkdir -p artifacts
           # Copy produced build outputs from VPS back to runner.
-          scp -P "${{ secrets.VPS_PORT || 22 }}" -r \
+          scp -P "$VPS_PORT" -r \
             "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ secrets.VPS_BUILD_ROOT || '~/yocto-project' }}/out/." artifacts/
 
       - name: Upload build artifacts
