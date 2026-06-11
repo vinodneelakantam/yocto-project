@@ -1,0 +1,55 @@
+digraph RepoCollabV3 {
+  graph [
+    label="Yocto Build Collaboration - Simplified",
+    labelloc=t,
+    fontsize=28,
+    fontname="DejaVu Sans",
+    rankdir=LR,
+    bgcolor="white",
+    pad=0.35,
+    nodesep=0.75,
+    ranksep=1.0,
+    splines=spline
+  ];
+
+  node [
+    shape=box,
+    style="rounded,filled",
+    fontname="DejaVu Sans",
+    fontsize=14,
+    penwidth=1.5,
+    margin="0.15,0.10"
+  ];
+
+  edge [
+    color="#374151",
+    arrowsize=0.9,
+    penwidth=1.4,
+    fontname="DejaVu Sans",
+    fontsize=12
+  ];
+
+  dev [label="1) Developer Team\nPush change or manual trigger", fillcolor="#FFF4E6", color="#B26A2E"];
+  repo [label="2) GitHub Repository\nStores workflow + project metadata", fillcolor="#E7F0FF", color="#24507A"];
+  gha [label="3) GitHub Actions\nOrchestrates remote build", fillcolor="#E7F0FF", color="#24507A"];
+  vps [label="4) VPS Build Server\nRuns Yocto/BitBake", fillcolor="#EAF8EE", color="#2D7A46"];
+  artifacts [label="5) GitHub Artifacts\nImages and logs for download", fillcolor="#F3F4F6", color="#5B6572"];
+
+  subgraph cluster_repo_contents {
+    label="Repository content used during build";
+    color="#D0D7DE";
+    style="rounded,dashed";
+    fontsize=16;
+
+    contents [shape=box, label="layers/ + conf/ + scripts/ + sources/ submodules\n(+ docs for team guidance)", fillcolor="#FBFCFD", color="#8A949E", fontsize=13];
+  }
+
+  dev -> repo [label="commit"];
+  repo -> gha [label="workflow starts"];
+  gha -> vps [label="SSH + rsync"];
+  vps -> artifacts [label="build output upload"];
+  artifacts -> dev [label="download and review"];
+
+  repo -> contents [style=dashed, arrowhead=none, color="#94A3B8"];
+  contents -> vps [label="build inputs"];
+}
