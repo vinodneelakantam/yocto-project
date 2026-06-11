@@ -37,7 +37,7 @@ PKGS=(
   iputils-ping
   python3-git
   python3-jinja2
-  libegl1-mesa
+  libegl1
   libsdl1.2-dev
   xterm
   rsync

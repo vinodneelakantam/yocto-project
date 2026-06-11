@@ -26,8 +26,20 @@ if [[ ! -f "$POKY_INIT_SCRIPT" ]]; then
   exit 1
 fi
 
+# `oe-init-build-env` references optional env vars that may be unset.
+# Temporarily disable nounset so strict mode in this wrapper does not break it.
+nounset_was_set=0
+if [[ -o nounset ]]; then
+  nounset_was_set=1
+  set +u
+fi
+
 # shellcheck disable=SC1091
 source "$POKY_INIT_SCRIPT" "$YOCTO_BUILD_DIR" >/dev/null
+
+if [[ "$nounset_was_set" -eq 1 ]]; then
+  set -u
+fi
 
 LOCAL_CONF="$YOCTO_BUILD_DIR/conf/local.conf"
 if [[ -f "$LOCAL_CONF" ]]; then
