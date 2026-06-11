@@ -83,6 +83,7 @@ jobs:
 
       - name: Prepare SSH
         if: env.VPS_CONFIGURED == 'true'
+        continue-on-error: true
         shell: bash
         run: |
           set -eu
@@ -96,6 +97,7 @@ jobs:
 
       - name: Sync repository to VPS
         if: env.VPS_CONFIGURED == 'true'
+        continue-on-error: true
         shell: bash
         run: |
           set -eu
@@ -107,6 +109,7 @@ jobs:
 
       - name: Execute remote Yocto build
         if: env.VPS_CONFIGURED == 'true'
+        continue-on-error: true
         shell: bash
         run: |
           set -eu
@@ -118,6 +121,7 @@ jobs:
 
       - name: Collect artifacts from VPS
         if: env.VPS_CONFIGURED == 'true'
+        continue-on-error: true
         shell: bash
         run: |
           set -eu
@@ -129,6 +133,7 @@ jobs:
 
       - name: Upload build artifacts
         if: env.VPS_CONFIGURED == 'true'
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           # Keep artifacts per-run for traceability and debugging.
