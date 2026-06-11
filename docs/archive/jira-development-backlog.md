@@ -1,5 +1,10 @@
 # Jira Development Backlog - Yocto GitHub-First Build Platform
 
+## Quick Status Table
+
+For an easy-to-find tabular view, see:
+- docs/archive/jira-status-table.md
+
 ## How to Use This File
 
 - Create one Epic in Jira for each Epic section below.
@@ -17,6 +22,76 @@
 - security
 - ota
 - portfolio
+
+## Current Implementation Status (This Repository)
+
+Legend:
+- DONE: Implemented in repository
+- PARTIAL: Started but not fully meeting acceptance criteria
+- PENDING: Not yet implemented
+
+### Status By Ticket
+
+- PLAT-001: DONE
+- PLAT-002: DONE
+- CICD-001: DONE
+- CICD-002: PARTIAL
+- COMP-001: PARTIAL
+- COMP-002: PENDING
+- COMP-003: PENDING
+- PERF-001: PARTIAL
+- PERF-002: PARTIAL
+- SEC-001: PENDING
+- SEC-002: PENDING
+- OTA-001: PENDING
+- OTA-002: PENDING
+- DX-001: PARTIAL
+- DX-002: DONE
+
+### Status Tracker Table
+
+| Jira Ticket | Status | Comments |
+|---|---|---|
+| PLAT-001 | DONE | Repository conventions and guardrails documented; structure baseline captured. |
+| PLAT-002 | DONE | Submodule validation added in workflow and local flow documented. |
+| CICD-001 | DONE | Workflow hardened with fail-fast checks, normalized inputs, and deterministic artifact behavior. |
+| CICD-002 | PARTIAL | Workflow summary exists; add explicit artifact link and precise duration field. |
+| COMP-001 | PARTIAL | Backend input and normalization added; full backend abstraction contract still pending. |
+| COMP-002 | PENDING | AWS Spot lifecycle not implemented; only planning and placeholder script present. |
+| COMP-003 | PENDING | No automated fallback policy yet for Spot interruption or capacity failures. |
+| PERF-001 | PARTIAL | Cache paths wired in build script; shared cache backend restore/save policy still pending. |
+| PERF-002 | PARTIAL | Package bootstrap script added; strict version validation and manifest checks still pending. |
+| SEC-001 | PENDING | Secret scope, rotation policy, and emergency runbook not yet authored. |
+| SEC-002 | PENDING | Artifact signing, checksum publication, and verification pipeline not yet implemented. |
+| OTA-001 | PENDING | OTA A/B and rollback implementation details not yet documented to completion. |
+| OTA-002 | PENDING | Release tagging, retention rules, and promotion workflow still pending. |
+| DX-001 | PARTIAL | Docs improved, but explicit portfolio navigation path in README can be strengthened. |
+| DX-002 | DONE | Contributor onboarding checklist added and linked in project docs. |
+
+### Pending Work Summary (Actionable)
+
+- CICD-002:
+  - Add artifact link and explicit duration in GitHub Actions summary.
+- COMP-001:
+  - Complete backend routing abstraction with a common build contract beyond VPS-only path.
+- COMP-002:
+  - Implement AWS Spot worker lifecycle (provision, bootstrap, run, collect, teardown).
+- COMP-003:
+  - Add fallback policy for Spot interruption or no-capacity events.
+- PERF-001:
+  - Implement shared cache backend restore or save and branch or target-safe cache keys.
+- PERF-002:
+  - Add strict package version validation and tooling manifest checks.
+- SEC-001:
+  - Add formal secrets scope or rotation policy and emergency rotation runbook.
+- SEC-002:
+  - Implement artifact signing, checksum publication, and verification steps.
+- OTA-001:
+  - Add OTA A/B and rollback decision documentation plus required release metadata mapping.
+- OTA-002:
+  - Add semantic release and tagging policy and artifact retention policy.
+- DX-001:
+  - Add explicit portfolio navigation path to build evidence in GitHub Actions.
 
 ## EPIC 1: Platform Foundation And Repository Baseline
 
