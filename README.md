@@ -1,9 +1,22 @@
 # Yocto GitHub-Centric Build Project
 
 This repository implements a GitHub-first workflow for Yocto development:
-- GitHub is the control and visibility layer
-- External compute (VPS) is the build execution layer
-- Artifacts and logs are published back to GitHub
+- GitHub is the control and visibility layer for your recipes/apps and build history
+- External compute is the build execution layer (VPS, AWS Spot, or similar)
+- Artifacts and logs are always published back to GitHub Actions
+
+## Purpose In One View
+
+This repo is the coordination hub and public frontend for your Yocto work.
+
+- Team members push recipes/app changes here.
+- GitHub Actions starts and tracks the build process.
+- Heavy Yocto builds run on external compute when GitHub/Codespaces resources are not enough.
+- Build outputs are returned to GitHub as artifacts for review/download.
+
+See the visual block diagram:
+- PNG: `docs/diagrams/repo-collaboration-block-diagram-v3.png`
+- Source: `docs/diagrams/repo-collaboration-block-diagram-v3.dot`
 
 ## Repository Layout
 
@@ -15,14 +28,14 @@ This repository implements a GitHub-first workflow for Yocto development:
 
 ## What This Repository Does (Detailed)
 
-This repository is a **Yocto build orchestrator**, not a full mirror of upstream Yocto source trees.
+This repository is a **Yocto build orchestrator and showcase**, not a full mirror of upstream Yocto source trees.
 
 ### Primary responsibilities
 
 - Keep upstream Yocto sources in `sources/` as **Git submodules** (pinned to known commits)
-- Store project-specific layers in `layers/`
+- Store project-specific layers/recipes/apps in `layers/`
 - Provide reusable build configuration templates in `conf/`
-- Automate remote builds using GitHub Actions and VPS execution scripts
+- Automate remote builds using GitHub Actions with external cost-optimized compute
 - Return build outputs to GitHub as downloadable workflow artifacts
 
 ### End-to-end workflow
@@ -33,6 +46,25 @@ This repository is a **Yocto build orchestrator**, not a full mirror of upstream
 4. Repository contents are synced to a VPS build directory.
 5. `scripts/remote-build.sh` runs BitBake on the VPS.
 6. Built images/logs from `out/` are copied back and uploaded as artifacts.
+
+### What gets built where
+
+- Built on external compute (VPS, AWS Spot, or similar):
+	- Yocto image targets (for example `core-image-minimal`)
+	- BitBake outputs and logs
+	- Full repo checkout plus submodules
+	- Compiler/toolchain dependencies installed as packages on build nodes
+	- Build cache reuse (`sstate-cache`, `downloads`, and other reusable artifacts)
+- Built on GitHub runner:
+	- No heavy Yocto compile workload
+	- Orchestration tasks only (trigger, sync/bootstrap, collect, upload)
+
+### Compute strategy
+
+- Primary goal: keep GitHub as the single place to view build status, logs, and outputs.
+- If GitHub/Codespaces compute is insufficient, run builds on cloud spot machines (for example AWS Spot) to reduce cost.
+- Build nodes are treated as disposable workers; checkout and dependency setup happen on demand.
+- Caching is used to keep rebuild times and costs low.
 
 ### Why submodules are used
 
