@@ -1,0 +1,79 @@
+# Local Build Instructions
+
+This project supports running Yocto builds directly on your local machine.
+
+## What You Need
+
+- Linux host with enough CPU, RAM, and disk for Yocto builds.
+- Git submodules initialized.
+- Required build packages installed.
+
+## 1) Initialize Sources
+
+Run from repository root:
+
+```bash
+git submodule update --init --recursive
+```
+
+## 2) Install Build Dependencies
+
+Use the helper script:
+
+```bash
+./scripts/bootstrap-worker-packages.sh
+```
+
+If you do not want auto package install from scripts, you can disable it during build with:
+
+```bash
+export BOOTSTRAP_PACKAGES=false
+```
+
+## 3) Run Local Build
+
+One-command full local build (recommended):
+
+```bash
+./scripts/local-build.sh core-image-minimal false
+```
+
+This wrapper performs:
+
+- Submodule initialization/update
+- Optional package bootstrap
+- Yocto build execution
+
+Build default target:
+
+```bash
+./scripts/remote-build.sh core-image-minimal false
+```
+
+Parameters:
+
+- First argument: image target (example: `core-image-minimal`)
+- Second argument: clean flag (`true` or `false`)
+
+Example clean rebuild:
+
+```bash
+./scripts/remote-build.sh core-image-minimal true
+```
+
+## 4) Find Build Outputs
+
+After success, outputs are staged in:
+
+- `out/`
+- `out/build-summary.txt`
+- `out/images/` (when deploy images are produced)
+
+## 5) Common Issues
+
+- Missing `sources/poky/oe-init-build-env`:
+  - Re-run submodule init/update.
+- Dependency/install errors:
+  - Re-run `./scripts/bootstrap-worker-packages.sh`.
+- Very slow build:
+  - Reuse cache directories under `.cache/yocto/` and avoid `clean=true` unless needed.

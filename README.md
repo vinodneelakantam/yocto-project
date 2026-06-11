@@ -31,6 +31,7 @@ See the visual block diagram:
 - Repository conventions: `docs/repo-conventions.md`
 - Contributor onboarding: `docs/onboarding-checklist.md`
 - Cloud worker placeholder plan: `docs/cloud/aws-spot-worker-plan.md`
+- Local build instructions: `docs/local-build.md`
 
 ## What This Repository Does (Detailed)
 
