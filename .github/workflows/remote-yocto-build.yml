@@ -53,7 +53,7 @@ jobs:
             VPS_BUILD_ROOT="\$HOME/${VPS_BUILD_ROOT:2}"
           elif [[ "$VPS_BUILD_ROOT" == "~" ]]; then
             VPS_BUILD_ROOT='$HOME'
-          elif [[ ! "$VPS_BUILD_ROOT" =~ ^[A-Za-z0-9_./$-]+$ ]]; then
+          elif [[ ! "$VPS_BUILD_ROOT" =~ ^[A-Za-z0-9_./-]+$ ]]; then
             echo "::warning::Invalid VPS_BUILD_ROOT secret provided; falling back to \$HOME/yocto-project."
             VPS_BUILD_ROOT='$HOME/yocto-project'
           fi
@@ -91,7 +91,7 @@ jobs:
           set -euo pipefail
           # Execute build on VPS where Yocto has enough CPU/RAM/disk.
           ssh -p "$VPS_PORT" "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
-            "cd $VPS_BUILD_ROOT && \
+            "cd \"$VPS_BUILD_ROOT\" && \
              chmod +x scripts/remote-build.sh && \
              scripts/remote-build.sh '$IMAGE_TARGET' '$CLEAN_BUILD'"
 
