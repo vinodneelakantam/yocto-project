@@ -26,6 +26,12 @@ See the visual block diagram:
 - `docs/`: Architecture, security, OTA, and operations notes
 - `.github/workflows/`: CI workflows that orchestrate remote builds
 
+## Project Guardrails
+
+- Repository conventions: `docs/repo-conventions.md`
+- Contributor onboarding: `docs/onboarding-checklist.md`
+- Cloud worker placeholder plan: `docs/cloud/aws-spot-worker-plan.md`
+
 ## What This Repository Does (Detailed)
 
 This repository is a **Yocto build orchestrator and showcase**, not a full mirror of upstream Yocto source trees.

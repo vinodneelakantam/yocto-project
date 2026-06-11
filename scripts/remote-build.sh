@@ -7,8 +7,17 @@ BUILD_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_DIR="$BUILD_ROOT/out"
 YOCTO_BUILD_DIR="$BUILD_ROOT/build"
 POKY_INIT_SCRIPT="$BUILD_ROOT/sources/poky/oe-init-build-env"
+WORKER_BOOTSTRAP_SCRIPT="$BUILD_ROOT/scripts/bootstrap-worker-packages.sh"
+CACHE_ROOT="$BUILD_ROOT/.cache/yocto"
+DL_DIR="$CACHE_ROOT/downloads"
+SSTATE_DIR="$CACHE_ROOT/sstate-cache"
 
 mkdir -p "$OUT_DIR"
+mkdir -p "$DL_DIR" "$SSTATE_DIR"
+
+if [[ -x "$WORKER_BOOTSTRAP_SCRIPT" ]]; then
+  "$WORKER_BOOTSTRAP_SCRIPT"
+fi
 
 if [[ ! -f "$POKY_INIT_SCRIPT" ]]; then
   echo "Missing poky init script: $POKY_INIT_SCRIPT"
@@ -19,6 +28,16 @@ fi
 
 # shellcheck disable=SC1091
 source "$POKY_INIT_SCRIPT" "$YOCTO_BUILD_DIR" >/dev/null
+
+LOCAL_CONF="$YOCTO_BUILD_DIR/conf/local.conf"
+if [[ -f "$LOCAL_CONF" ]]; then
+  if ! grep -q '^DL_DIR\s*=' "$LOCAL_CONF"; then
+    printf 'DL_DIR = "%s"\n' "$DL_DIR" >> "$LOCAL_CONF"
+  fi
+  if ! grep -q '^SSTATE_DIR\s*=' "$LOCAL_CONF"; then
+    printf 'SSTATE_DIR = "%s"\n' "$SSTATE_DIR" >> "$LOCAL_CONF"
+  fi
+fi
 
 if [[ "$CLEAN_BUILD" == "true" ]]; then
   bitbake -c cleansstate "$IMAGE_TARGET"
@@ -36,6 +55,9 @@ cat > "$OUT_DIR/build-summary.txt" <<EOF
 Build completed successfully.
 Image target: $IMAGE_TARGET
 Build dir: $YOCTO_BUILD_DIR
+DL_DIR: $DL_DIR
+SSTATE_DIR: $SSTATE_DIR
+Git revision: $(git -C "$BUILD_ROOT" rev-parse --short HEAD 2>/dev/null || echo "unknown")
 Timestamp: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
 EOF
 

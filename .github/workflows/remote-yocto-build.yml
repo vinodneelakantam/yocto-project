@@ -13,6 +13,10 @@ on:
         description: "Run bitbake -c cleansstate before build"
         required: false
         default: "false"
+      backend:
+        description: "Compute backend (currently supported: vps)"
+        required: false
+        default: "vps"
 
 jobs:
   orchestrate-remote-build:
@@ -23,12 +27,30 @@ jobs:
       # Allow manual overrides from workflow_dispatch; keep safe defaults for push runs.
       IMAGE_TARGET: ${{ github.event.inputs.image || 'core-image-minimal' }}
       CLEAN_BUILD: ${{ github.event.inputs.clean || 'false' }}
+      COMPUTE_BACKEND: ${{ github.event.inputs.backend || 'vps' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           # Required so pinned Yocto sources in sources/ are available.
           submodules: recursive
+
+      - name: Validate required Yocto submodules
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f sources/poky/oe-init-build-env
+          test -d sources/meta-openembedded
+          git submodule status --recursive
+
+      - name: Capture build metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            printf 'BUILD_STARTED_AT=%s\n' "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+            printf 'GIT_REV=%s\n' "$(git rev-parse --short HEAD)"
+          } >> "$GITHUB_ENV"
 
       - name: Normalize remote settings
         shell: bash
@@ -39,7 +61,16 @@ jobs:
           RAW_VPS_USER: ${{ secrets.VPS_USER }}
           RAW_VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
         run: |
-          set -eu
+          set -euo pipefail
+
+          COMPUTE_BACKEND="${COMPUTE_BACKEND,,}"
+          if [[ -z "$COMPUTE_BACKEND" ]]; then
+            COMPUTE_BACKEND=vps
+          fi
+          if [[ "$COMPUTE_BACKEND" != "vps" ]]; then
+            echo "::warning::Unsupported backend '$COMPUTE_BACKEND'. Falling back to 'vps'."
+            COMPUTE_BACKEND=vps
+          fi
 
           VPS_PORT="${RAW_VPS_PORT//[[:space:]]/}"
           if [[ -z "$VPS_PORT" ]]; then
@@ -79,11 +110,19 @@ jobs:
             printf 'VPS_PORT=%s\n' "$VPS_PORT"
             printf 'VPS_BUILD_ROOT=%s\n' "$VPS_BUILD_ROOT"
             printf 'VPS_CONFIGURED=%s\n' "$VPS_CONFIGURED"
+            printf 'COMPUTE_BACKEND=%s\n' "$COMPUTE_BACKEND"
           } >> "$GITHUB_ENV"
+
+      - name: Fail fast when remote backend is not configured
+        if: env.VPS_CONFIGURED != 'true'
+        shell: bash
+        run: |
+          echo "VPS backend is selected but required secrets are missing."
+          echo "Set VPS_HOST, VPS_USER, and VPS_SSH_KEY repository secrets."
+          exit 1
 
       - name: Prepare SSH
         if: env.VPS_CONFIGURED == 'true'
-        continue-on-error: true
         shell: bash
         run: |
           set -eu
@@ -97,7 +136,6 @@ jobs:
 
       - name: Sync repository to VPS
         if: env.VPS_CONFIGURED == 'true'
-        continue-on-error: true
         shell: bash
         run: |
           set -eu
@@ -109,7 +147,6 @@ jobs:
 
       - name: Execute remote Yocto build
         if: env.VPS_CONFIGURED == 'true'
-        continue-on-error: true
         shell: bash
         run: |
           set -eu
@@ -121,7 +158,6 @@ jobs:
 
       - name: Collect artifacts from VPS
         if: env.VPS_CONFIGURED == 'true'
-        continue-on-error: true
         shell: bash
         run: |
           set -eu
@@ -133,7 +169,6 @@ jobs:
 
       - name: Upload build artifacts
         if: env.VPS_CONFIGURED == 'true'
-        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           # Keep artifacts per-run for traceability and debugging.
@@ -141,3 +176,22 @@ jobs:
           path: artifacts
           # Fail job when expected outputs are missing.
           if-no-files-found: error
+
+      - name: Publish workflow summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUILD_FINISHED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          {
+            echo "## Remote Yocto Build Summary"
+            echo ""
+            echo "- Status: ${{ job.status }}"
+            echo "- Image target: $IMAGE_TARGET"
+            echo "- Clean build: $CLEAN_BUILD"
+            echo "- Backend: $COMPUTE_BACKEND"
+            echo "- Git revision: $GIT_REV"
+            echo "- Started at (UTC): $BUILD_STARTED_AT"
+            echo "- Finished at (UTC): $BUILD_FINISHED_AT"
+            echo "- Artifact name: yocto-images-${{ github.run_number }}"
+          } >> "$GITHUB_STEP_SUMMARY"

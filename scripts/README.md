@@ -1,10 +1,12 @@
 # Scripts
 
 - `remote-build.sh`: Runs BitBake on remote compute and stages outputs in `out/`
+- `bootstrap-worker-packages.sh`: Installs required Yocto build dependencies on Debian/Ubuntu workers
 - `github/create-repo.sh`: Creates a GitHub repo from this directory and pushes it
 - `github/set-secrets.sh`: Configures required GitHub Actions secrets via `gh`
 - `github/run-workflow-once.sh`: Triggers `remote-yocto-build.yml` once and watches it
 - `github/install-gh-from-github.sh`: Downloads `gh` from official GitHub Releases into `.tmp/`, verifies checksum, and installs to `.local/bin/gh`
+- `cloud/aws-spot-build-placeholder.sh`: Placeholder interface for future AWS Spot worker lifecycle automation
 
 ## Notes
 
@@ -12,6 +14,7 @@
 - Ensure submodules are initialized before running remote builds
 - Use GitHub Actions workflow to call this script over SSH
 - If `gh` is not installed system-wide, scripts auto-bootstrap it from GitHub release packages
+- Worker package bootstrap can be disabled with `BOOTSTRAP_PACKAGES=false`
 
 ## GitHub Setup Automation
 
