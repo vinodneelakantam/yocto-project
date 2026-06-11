@@ -35,8 +35,11 @@ jobs:
         env:
           RAW_VPS_PORT: ${{ secrets.VPS_PORT }}
           RAW_VPS_BUILD_ROOT: ${{ secrets.VPS_BUILD_ROOT }}
+          RAW_VPS_HOST: ${{ secrets.VPS_HOST }}
+          RAW_VPS_USER: ${{ secrets.VPS_USER }}
+          RAW_VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
         run: |
-          set -euo pipefail
+          set -eu
 
           VPS_PORT="${RAW_VPS_PORT//[[:space:]]/}"
           if [[ -z "$VPS_PORT" ]]; then
@@ -58,15 +61,31 @@ jobs:
             VPS_BUILD_ROOT='$HOME/yocto-project'
           fi
 
+          VPS_CONFIGURED=true
+          if [[ -z "$RAW_VPS_HOST" ]]; then
+            echo "::warning::VPS_HOST secret is not set; skipping VPS steps."
+            VPS_CONFIGURED=false
+          fi
+          if [[ -z "$RAW_VPS_USER" ]]; then
+            echo "::warning::VPS_USER secret is not set; skipping VPS steps."
+            VPS_CONFIGURED=false
+          fi
+          if [[ -z "$RAW_VPS_SSH_KEY" ]]; then
+            echo "::warning::VPS_SSH_KEY secret is not set; skipping VPS steps."
+            VPS_CONFIGURED=false
+          fi
+
           {
             printf 'VPS_PORT=%s\n' "$VPS_PORT"
             printf 'VPS_BUILD_ROOT=%s\n' "$VPS_BUILD_ROOT"
+            printf 'VPS_CONFIGURED=%s\n' "$VPS_CONFIGURED"
           } >> "$GITHUB_ENV"
 
       - name: Prepare SSH
+        if: env.VPS_CONFIGURED == 'true'
         shell: bash
         run: |
-          set -euo pipefail
+          set -eu
           # Create SSH directory with strict permissions for private key usage.
           install -d -m 700 ~/.ssh
           # Inject deploy key from GitHub secret for VPS access.
@@ -76,9 +95,10 @@ jobs:
           ssh-keyscan -p "$VPS_PORT" "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
 
       - name: Sync repository to VPS
+        if: env.VPS_CONFIGURED == 'true'
         shell: bash
         run: |
-          set -euo pipefail
+          set -eu
           # Centralize target path so rsync/scp/ssh use the same remote root.
           DEST="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:$VPS_BUILD_ROOT"
           # Mirror workspace content to VPS and remove stale files from previous runs.
@@ -86,9 +106,10 @@ jobs:
           rsync -az --delete --exclude='.git' ./ "$DEST/"
 
       - name: Execute remote Yocto build
+        if: env.VPS_CONFIGURED == 'true'
         shell: bash
         run: |
-          set -euo pipefail
+          set -eu
           # Execute build on VPS where Yocto has enough CPU/RAM/disk.
           ssh -p "$VPS_PORT" "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
             "cd $VPS_BUILD_ROOT && \
@@ -96,9 +117,10 @@ jobs:
              scripts/remote-build.sh '$IMAGE_TARGET' '$CLEAN_BUILD'"
 
       - name: Collect artifacts from VPS
+        if: env.VPS_CONFIGURED == 'true'
         shell: bash
         run: |
-          set -euo pipefail
+          set -eu
           # Local staging directory on runner for upload-artifact input.
           mkdir -p artifacts
           # Copy produced build outputs from VPS back to runner.
@@ -106,6 +128,7 @@ jobs:
             "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:$VPS_BUILD_ROOT/out/." artifacts/
 
       - name: Upload build artifacts
+        if: env.VPS_CONFIGURED == 'true'
         uses: actions/upload-artifact@v4
         with:
           # Keep artifacts per-run for traceability and debugging.
