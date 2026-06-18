@@ -196,6 +196,7 @@ To make this reusable across new Codespaces in GitHub:
 1. Open repository **Settings -> Codespaces -> Prebuild configurations**.
 2. Create a prebuild for branch `main` using the default `.devcontainer/devcontainer.json`.
 3. Keep prebuilds enabled for the regions and machine type you use.
+4. Recommended machine is defined in `.devcontainer/devcontainer.json` as 8 CPUs and 16 GB RAM.
 
 With prebuilds enabled, new Codespaces pull the cached prebuilt image instead of
 running package installs from scratch.
