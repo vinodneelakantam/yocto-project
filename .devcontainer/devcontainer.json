@@ -1,0 +1,9 @@
+{
+  "name": "yocto-project",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "remoteUser": "vscode",
+  "postCreateCommand": "bash -lc 'command -v pzstd && pzstd --version | head -n 1'"
+}

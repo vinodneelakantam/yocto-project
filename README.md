@@ -152,3 +152,18 @@ export GH_REPO="owner/repo"
 - Add your real layer manifests in `layers/`
 - Implement signing and OTA pipeline from `docs/security-and-ota.md`
 - Extend workflow with release tagging and artifact retention policy
+
+## Codespaces Reuse (No Reinstall Every Time)
+
+This repository now includes a Dev Container definition at `.devcontainer/`.
+The container image installs Yocto worker dependencies during image build time
+(including `zstd` which provides `pzstd`).
+
+To make this reusable across new Codespaces in GitHub:
+
+1. Open repository **Settings -> Codespaces -> Prebuild configurations**.
+2. Create a prebuild for branch `main` using the default `.devcontainer/devcontainer.json`.
+3. Keep prebuilds enabled for the regions and machine type you use.
+
+With prebuilds enabled, new Codespaces pull the cached prebuilt image instead of
+running package installs from scratch.

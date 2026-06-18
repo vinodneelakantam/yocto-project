@@ -15,6 +15,7 @@
 - Use GitHub Actions workflow to call this script over SSH
 - If `gh` is not installed system-wide, scripts auto-bootstrap it from GitHub release packages
 - Worker package bootstrap can be disabled with `BOOTSTRAP_PACKAGES=false`
+- Worker bootstrap installs `zstd`, which provides `pzstd` required by Yocto HOSTTOOLS
 
 ## GitHub Setup Automation
 

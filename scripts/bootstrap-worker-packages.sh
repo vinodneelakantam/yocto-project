@@ -41,8 +41,15 @@ PKGS=(
   libsdl1.2-dev
   xterm
   rsync
+  zstd
 )
 
 echo "Installing worker packages required for Yocto builds..."
 $SUDO apt-get update -y
 $SUDO apt-get install -y "${PKGS[@]}"
+
+if ! command -v pzstd >/dev/null 2>&1; then
+  echo "ERROR: pzstd is still unavailable after package bootstrap."
+  echo "On Debian/Ubuntu, install package: zstd"
+  exit 1
+fi
