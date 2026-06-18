@@ -32,6 +32,16 @@ export BOOTSTRAP_PACKAGES=false
 
 ## 3) Run Local Build
 
+Optional shared cache (recommended across machines):
+
+```bash
+export YOCTO_CENTRAL_CACHE_RSYNC="<user>@<host>:/srv/yocto-cache"
+```
+
+When this variable is set, build scripts pull cache before build and push updated
+cache after build (`downloads` and `sstate-cache`). This lets local systems,
+Codespaces, and remote workers reuse the same dependency cache.
+
 One-command full local build (recommended):
 
 ```bash

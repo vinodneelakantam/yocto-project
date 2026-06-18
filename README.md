@@ -73,6 +73,37 @@ This repository is a **Yocto build orchestrator and showcase**, not a full mirro
 - Build nodes are treated as disposable workers; checkout and dependency setup happen on demand.
 - Caching is used to keep rebuild times and costs low.
 
+### Build Cache Reuse Across Environments
+
+Remote workflow `.github/workflows/remote-yocto-build.yml` now syncs Yocto cache
+content between VPS and GitHub Actions cache:
+
+- Restore cache from GitHub to runner (`downloads` and `sstate-cache`)
+- Push cache from runner to VPS before build
+- Run build on VPS using `.cache/yocto/`
+- Pull updated cache from VPS after build
+- Save refreshed cache back to GitHub
+
+This makes dependency/build cache reusable across new Codespaces, new runners,
+and future workflow runs in the same repository.
+
+For local builds (and any non-GitHub-runner environment), set:
+
+```bash
+export YOCTO_CENTRAL_CACHE_RSYNC="<user>@<host>:/srv/yocto-cache"
+```
+
+Then run build scripts normally. They will:
+
+- Pull `downloads` and `sstate-cache` from the central location before build
+- Push updated cache back after build
+
+Prepare central host directory once:
+
+```bash
+ssh <user>@<host> "mkdir -p /srv/yocto-cache/downloads /srv/yocto-cache/sstate-cache"
+```
+
 ### Why submodules are used
 
 - You keep a clean history of local project changes.
@@ -119,6 +150,7 @@ git submodule update --init --recursive
 - `VPS_SSH_KEY`
 - `VPS_PORT` (optional)
 - `VPS_BUILD_ROOT` (optional)
+- `YOCTO_CENTRAL_CACHE_RSYNC` (optional; example: `<user>@<host>:/srv/yocto-cache`)
 
 Use helper script after `gh auth login`:
 

@@ -28,6 +28,7 @@ jobs:
       IMAGE_TARGET: ${{ github.event.inputs.image || 'core-image-minimal' }}
       CLEAN_BUILD: ${{ github.event.inputs.clean || 'false' }}
       COMPUTE_BACKEND: ${{ github.event.inputs.backend || 'vps' }}
+      YOCTO_CACHE_DIR: .ci-cache/yocto
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -134,6 +135,33 @@ jobs:
           # Preload host key to avoid interactive trust prompt in CI.
           ssh-keyscan -p "$VPS_PORT" "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
 
+      - name: Restore Yocto dependency cache from GitHub
+        if: env.VPS_CONFIGURED == 'true'
+        id: yocto-cache-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            .ci-cache/yocto/downloads
+            .ci-cache/yocto/sstate-cache
+          key: yocto-cache-${{ github.repository }}-${{ github.ref_name }}
+          restore-keys: |
+            yocto-cache-${{ github.repository }}-
+
+      - name: Prime VPS Yocto cache
+        if: env.VPS_CONFIGURED == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$YOCTO_CACHE_DIR/downloads" "$YOCTO_CACHE_DIR/sstate-cache"
+          ssh -p "$VPS_PORT" "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
+            "mkdir -p '$VPS_BUILD_ROOT/.cache/yocto/downloads' '$VPS_BUILD_ROOT/.cache/yocto/sstate-cache'"
+          rsync -az \
+            "$YOCTO_CACHE_DIR/downloads/" \
+            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:$VPS_BUILD_ROOT/.cache/yocto/downloads/"
+          rsync -az \
+            "$YOCTO_CACHE_DIR/sstate-cache/" \
+            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:$VPS_BUILD_ROOT/.cache/yocto/sstate-cache/"
+
       - name: Sync repository to VPS
         if: env.VPS_CONFIGURED == 'true'
         shell: bash
@@ -148,13 +176,19 @@ jobs:
       - name: Execute remote Yocto build
         if: env.VPS_CONFIGURED == 'true'
         shell: bash
+        env:
+          YOCTO_CENTRAL_CACHE_RSYNC: ${{ secrets.YOCTO_CENTRAL_CACHE_RSYNC }}
         run: |
-          set -eu
+          set -euo pipefail
+          CENTRAL_CACHE_ENV=""
+          if [[ -n "${YOCTO_CENTRAL_CACHE_RSYNC:-}" ]]; then
+            printf -v CENTRAL_CACHE_ENV 'YOCTO_CENTRAL_CACHE_RSYNC=%q ' "$YOCTO_CENTRAL_CACHE_RSYNC"
+          fi
           # Execute build on VPS where Yocto has enough CPU/RAM/disk.
           ssh -p "$VPS_PORT" "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
             "cd $VPS_BUILD_ROOT && \
              chmod +x scripts/remote-build.sh && \
-             scripts/remote-build.sh '$IMAGE_TARGET' '$CLEAN_BUILD'"
+             ${CENTRAL_CACHE_ENV}scripts/remote-build.sh '$IMAGE_TARGET' '$CLEAN_BUILD'"
 
       - name: Collect artifacts from VPS
         if: env.VPS_CONFIGURED == 'true'
@@ -166,6 +200,28 @@ jobs:
           # Copy produced build outputs from VPS back to runner.
           scp -P "$VPS_PORT" -r \
             "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:$VPS_BUILD_ROOT/out/." artifacts/
+
+      - name: Pull updated Yocto cache from VPS
+        if: env.VPS_CONFIGURED == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$YOCTO_CACHE_DIR/downloads" "$YOCTO_CACHE_DIR/sstate-cache"
+          rsync -az --delete \
+            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:$VPS_BUILD_ROOT/.cache/yocto/downloads/." \
+            "$YOCTO_CACHE_DIR/downloads/"
+          rsync -az --delete \
+            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:$VPS_BUILD_ROOT/.cache/yocto/sstate-cache/." \
+            "$YOCTO_CACHE_DIR/sstate-cache/"
+
+      - name: Save Yocto dependency cache to GitHub
+        if: env.VPS_CONFIGURED == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            .ci-cache/yocto/downloads
+            .ci-cache/yocto/sstate-cache
+          key: yocto-cache-${{ github.repository }}-${{ github.ref_name }}-${{ github.run_id }}
 
       - name: Upload build artifacts
         if: env.VPS_CONFIGURED == 'true'
@@ -190,6 +246,7 @@ jobs:
             echo "- Image target: $IMAGE_TARGET"
             echo "- Clean build: $CLEAN_BUILD"
             echo "- Backend: $COMPUTE_BACKEND"
+            echo "- Yocto dependency cache restored: ${{ steps.yocto-cache-restore.outputs.cache-hit || 'false' }}"
             echo "- Git revision: $GIT_REV"
             echo "- Started at (UTC): $BUILD_STARTED_AT"
             echo "- Finished at (UTC): $BUILD_FINISHED_AT"

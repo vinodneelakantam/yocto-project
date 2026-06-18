@@ -16,6 +16,8 @@
 - If `gh` is not installed system-wide, scripts auto-bootstrap it from GitHub release packages
 - Worker package bootstrap can be disabled with `BOOTSTRAP_PACKAGES=false`
 - Worker bootstrap installs `zstd`, which provides `pzstd` required by Yocto HOSTTOOLS
+- To share cache across local, Codespaces, and VPS builds, set `YOCTO_CENTRAL_CACHE_RSYNC=<user>@<host>:/srv/yocto-cache`
+- `scripts/remote-build.sh` will pull and push `downloads` and `sstate-cache` to that central cache endpoint
 
 ## GitHub Setup Automation
 

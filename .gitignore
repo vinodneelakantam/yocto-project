@@ -3,6 +3,7 @@ build/
 out/
 .tmp/
 .local/
+.cache/
 
 # Upstream source trees
 # Track selected upstreams as submodules; keep other source dirs local.
