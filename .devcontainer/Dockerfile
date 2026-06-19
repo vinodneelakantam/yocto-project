@@ -6,6 +6,3 @@ RUN chmod +x /tmp/bootstrap-worker-packages.sh \
     && /tmp/bootstrap-worker-packages.sh \
     && rm -f /tmp/bootstrap-worker-packages.sh \
     && rm -rf /var/lib/apt/lists/*
-
-hostRequirements:
-  storage: 64gb
