@@ -187,7 +187,7 @@ jobs:
           # Execute build on VPS where Yocto has enough CPU/RAM/disk.
           ssh -p "$VPS_PORT" "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
             "cd $VPS_BUILD_ROOT && \
-             chmod +x scripts/remote-build.sh && \
+             chmod +x scripts/remote-build.sh scripts/bootstrap-worker-packages.sh scripts/devcontainer-sanity-check.sh && \
              ${CENTRAL_CACHE_ENV}scripts/remote-build.sh '$IMAGE_TARGET' '$CLEAN_BUILD'"
 
       - name: Collect artifacts from VPS
