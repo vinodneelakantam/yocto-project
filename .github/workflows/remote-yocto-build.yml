@@ -13,47 +13,21 @@ on:
         description: "Run bitbake -c cleansstate before build"
         required: false
         default: "false"
-      backend:
-        description: "Compute backend (currently supported: vps)"
-        required: false
-        default: "vps"
 
 jobs:
-  orchestrate-remote-build:
-    # Run orchestration on GitHub-hosted runner while heavy build happens on VPS.
+  remote-build:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
-      # Allow manual overrides from workflow_dispatch; keep safe defaults for push runs.
       IMAGE_TARGET: ${{ github.event.inputs.image || 'core-image-minimal' }}
       CLEAN_BUILD: ${{ github.event.inputs.clean || 'false' }}
-      COMPUTE_BACKEND: ${{ github.event.inputs.backend || 'vps' }}
-      YOCTO_CACHE_DIR: .ci-cache/yocto
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # Required so pinned Yocto sources in sources/ are available.
           submodules: recursive
 
-      - name: Validate required Yocto submodules
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -f sources/poky/oe-init-build-env
-          test -d sources/meta-openembedded
-          git submodule status --recursive
-
-      - name: Capture build metadata
-        shell: bash
-        run: |
-          set -euo pipefail
-          {
-            printf 'BUILD_STARTED_AT=%s\n' "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-            printf 'GIT_REV=%s\n' "$(git rev-parse --short HEAD)"
-          } >> "$GITHUB_ENV"
-
-      - name: Normalize remote settings
+      - name: Validate secrets and set remote defaults
         shell: bash
         env:
           RAW_VPS_PORT: ${{ secrets.VPS_PORT }}
@@ -64,117 +38,37 @@ jobs:
         run: |
           set -euo pipefail
 
-          COMPUTE_BACKEND="${COMPUTE_BACKEND,,}"
-          if [[ -z "$COMPUTE_BACKEND" ]]; then
-            COMPUTE_BACKEND=vps
-          fi
-          if [[ "$COMPUTE_BACKEND" != "vps" ]]; then
-            echo "::warning::Unsupported backend '$COMPUTE_BACKEND'. Falling back to 'vps'."
-            COMPUTE_BACKEND=vps
+          if [[ -z "$RAW_VPS_HOST" || -z "$RAW_VPS_USER" || -z "$RAW_VPS_SSH_KEY" ]]; then
+            echo "Missing required secrets: VPS_HOST, VPS_USER, VPS_SSH_KEY"
+            exit 1
           fi
 
           VPS_PORT="${RAW_VPS_PORT//[[:space:]]/}"
-          if [[ -z "$VPS_PORT" ]]; then
-            VPS_PORT=22
-          elif [[ ! "$VPS_PORT" =~ ^[0-9]+$ ]] || (( VPS_PORT < 1 || VPS_PORT > 65535 )); then
-            echo "::warning::Invalid VPS_PORT secret provided; falling back to port 22."
-            VPS_PORT=22
-          fi
+          [[ -z "$VPS_PORT" ]] && VPS_PORT=22
 
           VPS_BUILD_ROOT="$RAW_VPS_BUILD_ROOT"
-          if [[ -z "$VPS_BUILD_ROOT" ]]; then
-            VPS_BUILD_ROOT='$HOME/yocto-project'
-          elif [[ "$VPS_BUILD_ROOT" == "~/"* ]]; then
-            VPS_BUILD_ROOT="\$HOME/${VPS_BUILD_ROOT:2}"
-          elif [[ "$VPS_BUILD_ROOT" == "~" ]]; then
-            VPS_BUILD_ROOT='$HOME'
-          elif [[ ! "$VPS_BUILD_ROOT" =~ ^[A-Za-z0-9_./$-]+$ ]]; then
-            echo "::warning::Invalid VPS_BUILD_ROOT secret provided; falling back to \$HOME/yocto-project."
-            VPS_BUILD_ROOT='$HOME/yocto-project'
-          fi
+          [[ -z "$VPS_BUILD_ROOT" ]] && VPS_BUILD_ROOT='$HOME/yocto-project'
 
-          VPS_CONFIGURED=true
-          if [[ -z "$RAW_VPS_HOST" ]]; then
-            echo "::warning::VPS_HOST secret is not set; skipping VPS steps."
-            VPS_CONFIGURED=false
-          fi
-          if [[ -z "$RAW_VPS_USER" ]]; then
-            echo "::warning::VPS_USER secret is not set; skipping VPS steps."
-            VPS_CONFIGURED=false
-          fi
-          if [[ -z "$RAW_VPS_SSH_KEY" ]]; then
-            echo "::warning::VPS_SSH_KEY secret is not set; skipping VPS steps."
-            VPS_CONFIGURED=false
-          fi
-
-          {
-            printf 'VPS_PORT=%s\n' "$VPS_PORT"
-            printf 'VPS_BUILD_ROOT=%s\n' "$VPS_BUILD_ROOT"
-            printf 'VPS_CONFIGURED=%s\n' "$VPS_CONFIGURED"
-            printf 'COMPUTE_BACKEND=%s\n' "$COMPUTE_BACKEND"
-          } >> "$GITHUB_ENV"
-
-      - name: Fail fast when remote backend is not configured
-        if: env.VPS_CONFIGURED != 'true'
-        shell: bash
-        run: |
-          echo "VPS backend is selected but required secrets are missing."
-          echo "Set VPS_HOST, VPS_USER, and VPS_SSH_KEY repository secrets."
-          exit 1
+          echo "VPS_PORT=$VPS_PORT" >> "$GITHUB_ENV"
+          echo "VPS_BUILD_ROOT=$VPS_BUILD_ROOT" >> "$GITHUB_ENV"
 
       - name: Prepare SSH
-        if: env.VPS_CONFIGURED == 'true'
-        shell: bash
-        run: |
-          set -eu
-          # Create SSH directory with strict permissions for private key usage.
-          install -d -m 700 ~/.ssh
-          # Inject deploy key from GitHub secret for VPS access.
-          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          # Preload host key to avoid interactive trust prompt in CI.
-          ssh-keyscan -p "$VPS_PORT" "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
-
-      - name: Restore Yocto dependency cache from GitHub
-        if: env.VPS_CONFIGURED == 'true'
-        id: yocto-cache-restore
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            .ci-cache/yocto/downloads
-            .ci-cache/yocto/sstate-cache
-          key: yocto-cache-${{ github.repository }}-${{ github.ref_name }}
-          restore-keys: |
-            yocto-cache-${{ github.repository }}-
-
-      - name: Prime VPS Yocto cache
-        if: env.VPS_CONFIGURED == 'true'
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$YOCTO_CACHE_DIR/downloads" "$YOCTO_CACHE_DIR/sstate-cache"
-          ssh -p "$VPS_PORT" "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
-            "mkdir -p '$VPS_BUILD_ROOT/.cache/yocto/downloads' '$VPS_BUILD_ROOT/.cache/yocto/sstate-cache'"
-          rsync -az \
-            "$YOCTO_CACHE_DIR/downloads/" \
-            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:$VPS_BUILD_ROOT/.cache/yocto/downloads/"
-          rsync -az \
-            "$YOCTO_CACHE_DIR/sstate-cache/" \
-            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:$VPS_BUILD_ROOT/.cache/yocto/sstate-cache/"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "$VPS_PORT" "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
 
       - name: Sync repository to VPS
-        if: env.VPS_CONFIGURED == 'true'
         shell: bash
         run: |
-          set -eu
-          # Centralize target path so rsync/scp/ssh use the same remote root.
+          set -euo pipefail
           DEST="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:$VPS_BUILD_ROOT"
-          # Mirror workspace content to VPS and remove stale files from previous runs.
-          # Excluding .git keeps transfer lighter and avoids nested git metadata on VPS.
           rsync -az --delete --exclude='.git' ./ "$DEST/"
 
       - name: Execute remote Yocto build
-        if: env.VPS_CONFIGURED == 'true'
         shell: bash
         env:
           YOCTO_CENTRAL_CACHE_RSYNC: ${{ secrets.YOCTO_CENTRAL_CACHE_RSYNC }}
@@ -184,71 +78,22 @@ jobs:
           if [[ -n "${YOCTO_CENTRAL_CACHE_RSYNC:-}" ]]; then
             printf -v CENTRAL_CACHE_ENV 'YOCTO_CENTRAL_CACHE_RSYNC=%q ' "$YOCTO_CENTRAL_CACHE_RSYNC"
           fi
-          # Execute build on VPS where Yocto has enough CPU/RAM/disk.
           ssh -p "$VPS_PORT" "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
             "cd $VPS_BUILD_ROOT && \
              chmod +x scripts/remote-build.sh scripts/bootstrap-worker-packages.sh scripts/devcontainer-sanity-check.sh && \
              ${CENTRAL_CACHE_ENV}scripts/remote-build.sh '$IMAGE_TARGET' '$CLEAN_BUILD'"
 
       - name: Collect artifacts from VPS
-        if: env.VPS_CONFIGURED == 'true'
         shell: bash
         run: |
-          set -eu
-          # Local staging directory on runner for upload-artifact input.
+          set -euo pipefail
           mkdir -p artifacts
-          # Copy produced build outputs from VPS back to runner.
           scp -P "$VPS_PORT" -r \
             "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:$VPS_BUILD_ROOT/out/." artifacts/
 
-      - name: Pull updated Yocto cache from VPS
-        if: env.VPS_CONFIGURED == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "$YOCTO_CACHE_DIR/downloads" "$YOCTO_CACHE_DIR/sstate-cache"
-          rsync -az --delete \
-            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:$VPS_BUILD_ROOT/.cache/yocto/downloads/." \
-            "$YOCTO_CACHE_DIR/downloads/"
-          rsync -az --delete \
-            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:$VPS_BUILD_ROOT/.cache/yocto/sstate-cache/." \
-            "$YOCTO_CACHE_DIR/sstate-cache/"
-
-      - name: Save Yocto dependency cache to GitHub
-        if: env.VPS_CONFIGURED == 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            .ci-cache/yocto/downloads
-            .ci-cache/yocto/sstate-cache
-          key: yocto-cache-${{ github.repository }}-${{ github.ref_name }}-${{ github.run_id }}
-
       - name: Upload build artifacts
-        if: env.VPS_CONFIGURED == 'true'
         uses: actions/upload-artifact@v4
         with:
-          # Keep artifacts per-run for traceability and debugging.
           name: yocto-images-${{ github.run_number }}
           path: artifacts
-          # Fail job when expected outputs are missing.
           if-no-files-found: error
-
-      - name: Publish workflow summary
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          BUILD_FINISHED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-          {
-            echo "## Remote Yocto Build Summary"
-            echo ""
-            echo "- Status: ${{ job.status }}"
-            echo "- Image target: $IMAGE_TARGET"
-            echo "- Clean build: $CLEAN_BUILD"
-            echo "- Backend: $COMPUTE_BACKEND"
-            echo "- Yocto dependency cache restored: ${{ steps.yocto-cache-restore.outputs.cache-hit || 'false' }}"
-            echo "- Git revision: $GIT_REV"
-            echo "- Started at (UTC): $BUILD_STARTED_AT"
-            echo "- Finished at (UTC): $BUILD_FINISHED_AT"
-            echo "- Artifact name: yocto-images-${{ github.run_number }}"
-          } >> "$GITHUB_STEP_SUMMARY"
