@@ -2,12 +2,14 @@
   "name": "yocto-project",
   "hostRequirements": {
     "cpus": 8,
-    "memory": "16gb"
+    "memory": "16gb",
+    "storage": "64gb"
   },
   "build": {
     "dockerfile": "Dockerfile",
     "context": ".."
   },
   "remoteUser": "vscode",
-  "postCreateCommand": "bash -lc 'command -v pzstd && pzstd --version | head -n 1'"
+  "postCreateCommand": "bash /workspaces/yocto-project/scripts/devcontainer-sanity-check.sh",
+  "postStartCommand": "bash /workspaces/yocto-project/scripts/devcontainer-sanity-check.sh"
 }

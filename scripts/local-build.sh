@@ -27,6 +27,17 @@ else
   echo "[local-build] Package bootstrap disabled by BOOTSTRAP_PACKAGES=false"
 fi
 
+echo "[local-build] Running host-tools sanity check..."
+if [[ -x scripts/devcontainer-sanity-check.sh ]]; then
+  if ! ./scripts/devcontainer-sanity-check.sh; then
+    echo "[local-build] ERROR: Host-tools sanity check failed."
+    echo "[local-build] Fix by enabling bootstrap (BOOTSTRAP_PACKAGES=true) or installing missing packages manually."
+    exit 1
+  fi
+else
+  echo "[local-build] WARNING: scripts/devcontainer-sanity-check.sh not found or not executable; skipping sanity check."
+fi
+
 echo "[local-build] Starting Yocto build..."
 ./scripts/remote-build.sh "$IMAGE_TARGET" "$CLEAN_BUILD"
 
