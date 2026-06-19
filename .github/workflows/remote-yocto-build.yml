@@ -1,4 +1,4 @@
-name: Remote Yocto Build
+name: Yocto Build
 
 on:
   push:
@@ -15,8 +15,8 @@ on:
         default: "false"
 
 jobs:
-  remote-build:
-    runs-on: ubuntu-latest
+  local-build:
+    runs-on: [self-hosted, linux]
     timeout-minutes: 120
     env:
       IMAGE_TARGET: ${{ github.event.inputs.image || 'core-image-minimal' }}
@@ -27,69 +27,21 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Validate secrets and set remote defaults
-        shell: bash
-        env:
-          RAW_VPS_PORT: ${{ secrets.VPS_PORT }}
-          RAW_VPS_BUILD_ROOT: ${{ secrets.VPS_BUILD_ROOT }}
-          RAW_VPS_HOST: ${{ secrets.VPS_HOST }}
-          RAW_VPS_USER: ${{ secrets.VPS_USER }}
-          RAW_VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
-        run: |
-          set -euo pipefail
-
-          if [[ -z "$RAW_VPS_HOST" || -z "$RAW_VPS_USER" || -z "$RAW_VPS_SSH_KEY" ]]; then
-            echo "Missing required secrets: VPS_HOST, VPS_USER, VPS_SSH_KEY"
-            exit 1
-          fi
-
-          VPS_PORT="${RAW_VPS_PORT//[[:space:]]/}"
-          [[ -z "$VPS_PORT" ]] && VPS_PORT=22
-
-          VPS_BUILD_ROOT="$RAW_VPS_BUILD_ROOT"
-          [[ -z "$VPS_BUILD_ROOT" ]] && VPS_BUILD_ROOT='$HOME/yocto-project'
-
-          echo "VPS_PORT=$VPS_PORT" >> "$GITHUB_ENV"
-          echo "VPS_BUILD_ROOT=$VPS_BUILD_ROOT" >> "$GITHUB_ENV"
-
-      - name: Prepare SSH
-        shell: bash
-        run: |
-          set -euo pipefail
-          install -d -m 700 ~/.ssh
-          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -p "$VPS_PORT" "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
-
-      - name: Sync repository to VPS
-        shell: bash
-        run: |
-          set -euo pipefail
-          DEST="${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:$VPS_BUILD_ROOT"
-          rsync -az --delete --exclude='.git' ./ "$DEST/"
-
-      - name: Execute remote Yocto build
+      - name: Run Yocto build on same node
         shell: bash
         env:
           YOCTO_CENTRAL_CACHE_RSYNC: ${{ secrets.YOCTO_CENTRAL_CACHE_RSYNC }}
         run: |
           set -euo pipefail
-          CENTRAL_CACHE_ENV=""
-          if [[ -n "${YOCTO_CENTRAL_CACHE_RSYNC:-}" ]]; then
-            printf -v CENTRAL_CACHE_ENV 'YOCTO_CENTRAL_CACHE_RSYNC=%q ' "$YOCTO_CENTRAL_CACHE_RSYNC"
-          fi
-          ssh -p "$VPS_PORT" "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
-            "cd $VPS_BUILD_ROOT && \
-             chmod +x scripts/remote-build.sh scripts/bootstrap-worker-packages.sh scripts/devcontainer-sanity-check.sh && \
-             ${CENTRAL_CACHE_ENV}scripts/remote-build.sh '$IMAGE_TARGET' '$CLEAN_BUILD'"
+          chmod +x scripts/local-build.sh scripts/remote-build.sh scripts/bootstrap-worker-packages.sh scripts/devcontainer-sanity-check.sh
+          ./scripts/local-build.sh "$IMAGE_TARGET" "$CLEAN_BUILD"
 
-      - name: Collect artifacts from VPS
+      - name: Collect local artifacts
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p artifacts
-          scp -P "$VPS_PORT" -r \
-            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:$VPS_BUILD_ROOT/out/." artifacts/
+          cp -a out/. artifacts/
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
