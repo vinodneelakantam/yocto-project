@@ -16,8 +16,8 @@ if command -v sudo >/dev/null 2>&1; then
   SUDO="sudo"
 fi
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SANITY_CHECK_SCRIPT="$ROOT_DIR/scripts/devcontainer-sanity-check.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SANITY_CHECK_SCRIPT="$SCRIPT_DIR/devcontainer-sanity-check.sh"
 
 DEBIAN_FRONTEND=noninteractive
 PKGS=(
