@@ -16,28 +16,64 @@ on:
 
 jobs:
   local-build:
-    runs-on: [self-hosted, linux]
-    timeout-minutes: 120
+    # Runs on a self-hosted runner registered inside a GitHub Codespace.
+    #
+    # SETUP (one-time, inside your Codespace terminal):
+    #   mkdir ~/actions-runner && cd ~/actions-runner
+    #   curl -sL https://github.com/actions/runner/releases/latest/download/actions-runner-linux-x64-2.321.0.tar.gz | tar xz
+    #   ./config.sh --url https://github.com/vinodneelakantam/yocto-project \
+    #               --token <token from Settings → Actions → Runners → New self-hosted runner> \
+    #               --labels codespace-yocto --name codespace-runner --unattended
+    #   ./run.sh &
+    #
+    # Pick a Codespace machine with ≥16 cores for fast parallel Yocto builds.
+    # The runner must be active (Codespace running) when this workflow triggers.
+    runs-on: [self-hosted, linux, codespace-yocto]
+    timeout-minutes: 360
     env:
       IMAGE_TARGET: ${{ github.event.inputs.image || 'core-image-minimal' }}
       CLEAN_BUILD: ${{ github.event.inputs.clean || 'false' }}
+      # Tools are already installed in the Codespace devcontainer — skip apt bootstrap.
+      BOOTSTRAP_PACKAGES: "false"
+      YOCTO_CENTRAL_CACHE_RSYNC: ${{ secrets.YOCTO_CENTRAL_CACHE_RSYNC }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Run Yocto build on same node
-        shell: bash
-        env:
-          YOCTO_CENTRAL_CACHE_RSYNC: ${{ secrets.YOCTO_CENTRAL_CACHE_RSYNC }}
+      - name: Restore Yocto downloads cache
+        # DL_DIR: source tarballs fetched by BitBake — rarely change, huge time saver.
+        uses: actions/cache@v4
+        with:
+          path: .cache/yocto/downloads
+          key: yocto-dl-${{ runner.os }}-${{ hashFiles('.gitmodules', 'conf/**') }}
+          restore-keys: |
+            yocto-dl-${{ runner.os }}-
+
+      - name: Restore Yocto sstate cache
+        # SSTATE_DIR: incremental build artefacts — avoids recompiling unchanged packages.
+        # Key is scoped to recipe files only (.bb/.bbappend/.bbclass) so documentation
+        # or README changes inside layers do not trigger unnecessary cache invalidation.
+        uses: actions/cache@v4
+        with:
+          path: .cache/yocto/sstate-cache
+          key: yocto-sstate-${{ runner.os }}-${{ env.IMAGE_TARGET }}-${{ hashFiles('.gitmodules', 'conf/**', 'layers/**/*.bb', 'layers/**/*.bbappend', 'layers/**/*.bbclass') }}
+          restore-keys: |
+            yocto-sstate-${{ runner.os }}-${{ env.IMAGE_TARGET }}-
+            yocto-sstate-${{ runner.os }}-
+
+      - name: Run Yocto build
+        # The runner lives inside the Codespace devcontainer, so all tools are
+        # pre-installed and no container wrapper is needed.
         run: |
           set -euo pipefail
-          chmod +x scripts/local-build.sh scripts/remote-build.sh scripts/bootstrap-worker-packages.sh scripts/devcontainer-sanity-check.sh
+          chmod +x scripts/local-build.sh scripts/remote-build.sh \
+            scripts/bootstrap-worker-packages.sh scripts/devcontainer-sanity-check.sh
           ./scripts/local-build.sh "$IMAGE_TARGET" "$CLEAN_BUILD"
 
       - name: Collect local artifacts
-        shell: bash
         run: |
           set -euo pipefail
           mkdir -p artifacts
