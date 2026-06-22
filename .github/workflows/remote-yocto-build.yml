@@ -23,7 +23,7 @@ on:
 # a build is already running, the in-flight run is cancelled so the latest
 # commit always builds with a warm cache from the previous completed run.
 concurrency:
-  group: yocto-build-main
+  group: yocto-build-${{ github.ref }}
   cancel-in-progress: true
 
 # Workflow-level defaults — jobs inherit these and can override.
