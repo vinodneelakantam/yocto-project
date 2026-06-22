@@ -40,6 +40,11 @@ jobs:
       packages: write   # needed only when the image must be pushed
 
     steps:
+      # Checkout is required before the image check so that hashFiles() can
+      # compute the Dockerfile digest used for the versioned image tag.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
@@ -48,17 +53,18 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check whether build image already exists
+        # Use a versioned tag derived from the Dockerfile content hash so that
+        # any change to the Dockerfile automatically triggers a rebuild — even
+        # when the `latest` tag already exists.
         id: image-check
         run: |
-          if docker manifest inspect ghcr.io/${{ github.repository_owner }}/yocto-build-env:latest > /dev/null 2>&1; then
+          if docker manifest inspect \
+              "ghcr.io/${{ github.repository_owner }}/yocto-build-env:sha-${{ hashFiles('.devcontainer/Dockerfile') }}" \
+              > /dev/null 2>&1; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
-
-      - name: Checkout (required to build the image)
-        if: steps.image-check.outputs.exists == 'false'
-        uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         if: steps.image-check.outputs.exists == 'false'
@@ -71,7 +77,11 @@ jobs:
           context: .
           file: .devcontainer/Dockerfile
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/yocto-build-env:latest
+          # Push both the versioned tag (used by the existence check above) and
+          # `latest` (used by the remote-build docker pull).
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/yocto-build-env:latest
+            ghcr.io/${{ github.repository_owner }}/yocto-build-env:sha-${{ hashFiles('.devcontainer/Dockerfile') }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -238,6 +248,8 @@ jobs:
         run: |
           set -euo pipefail
           docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            --env HOME=/workspace \
             --volume "$GITHUB_WORKSPACE:/workspace" \
             --workdir /workspace \
             --env BOOTSTRAP_PACKAGES=false \

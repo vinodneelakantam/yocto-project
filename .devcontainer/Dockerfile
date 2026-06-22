@@ -6,3 +6,7 @@ RUN chmod +x /tmp/scripts/bootstrap-worker-packages.sh /tmp/scripts/devcontainer
     && /tmp/scripts/bootstrap-worker-packages.sh \
     && rm -rf /tmp/scripts \
     && rm -rf /var/lib/apt/lists/*
+
+# Run as the non-root 'vscode' user provided by the devcontainers base image.
+# BitBake refuses to run as root, so this is required for all build operations.
+USER vscode
