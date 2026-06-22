@@ -16,28 +16,35 @@ on:
 
 jobs:
   local-build:
-    # Runs on a self-hosted runner registered inside a GitHub Codespace.
+    # Runs on a GitHub-hosted runner (ubuntu-latest).
+    # All Yocto build dependencies are installed at the start of the job via
+    # scripts/bootstrap-worker-packages.sh.
     #
-    # SETUP (one-time, inside your Codespace terminal):
-    #   mkdir ~/actions-runner && cd ~/actions-runner
-    #   curl -sL https://github.com/actions/runner/releases/latest/download/actions-runner-linux-x64-2.321.0.tar.gz | tar xz
-    #   ./config.sh --url https://github.com/vinodneelakantam/yocto-project \
-    #               --token <token from Settings → Actions → Runners → New self-hosted runner> \
-    #               --labels codespace-yocto --name codespace-runner --unattended
-    #   ./run.sh &
-    #
-    # Pick a Codespace machine with ≥16 cores for fast parallel Yocto builds.
-    # The runner must be active (Codespace running) when this workflow triggers.
-    runs-on: [self-hosted, linux, codespace-yocto]
+    # For local development, use the devcontainer in .devcontainer/ which has
+    # all tools pre-installed in a Codespace or VS Code Dev Container.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
     timeout-minutes: 360
     env:
       IMAGE_TARGET: ${{ github.event.inputs.image || 'core-image-minimal' }}
       CLEAN_BUILD: ${{ github.event.inputs.clean || 'false' }}
-      # Tools are already installed in the Codespace devcontainer — skip apt bootstrap.
-      BOOTSTRAP_PACKAGES: "false"
+      BOOTSTRAP_PACKAGES: "true"
       YOCTO_CENTRAL_CACHE_RSYNC: ${{ secrets.YOCTO_CENTRAL_CACHE_RSYNC }}
 
     steps:
+      - name: Free up disk space
+        # GitHub-hosted runners ship with ~14 GB free. Yocto builds need 50+ GB.
+        # Removing unused pre-installed toolchains recovers ~30 GB.
+        run: |
+          sudo rm -rf /usr/local/lib/android \
+                      /usr/share/dotnet \
+                      /opt/ghc \
+                      /opt/hostedtoolcache/CodeQL \
+                      /usr/local/share/boost \
+                      "$AGENT_TOOLSDIRECTORY" || true
+          df -h /
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -65,8 +72,8 @@ jobs:
             yocto-sstate-${{ runner.os }}-
 
       - name: Run Yocto build
-        # The runner lives inside the Codespace devcontainer, so all tools are
-        # pre-installed and no container wrapper is needed.
+        # bootstrap-worker-packages.sh installs all Yocto host tools before
+        # the build starts (controlled by BOOTSTRAP_PACKAGES=true above).
         run: |
           set -euo pipefail
           chmod +x scripts/local-build.sh scripts/remote-build.sh \
