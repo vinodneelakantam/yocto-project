@@ -1,0 +1,146 @@
+digraph CIRemotePipeline {
+  graph [
+    label="Remote CI Build Pipeline — remote-build job  (remote-yocto-build.yml)",
+    labelloc=t,
+    fontsize=24,
+    fontname="DejaVu Sans",
+    rankdir=TB,
+    bgcolor="white",
+    pad=0.6,
+    nodesep=0.6,
+    ranksep=0.75,
+    splines=spline
+  ];
+
+  node [
+    shape=box,
+    style="rounded,filled",
+    fontname="DejaVu Sans",
+    fontsize=13,
+    penwidth=1.5,
+    margin="0.22,0.14",
+    width=4.2
+  ];
+
+  edge [
+    color="#374151",
+    arrowsize=0.85,
+    penwidth=1.4,
+    fontname="DejaVu Sans",
+    fontsize=11
+  ];
+
+  // ── Trigger ───────────────────────────────────────────────────────────────
+  trigger [
+    label="Trigger\ngit push to main   OR   workflow_dispatch",
+    fillcolor="#FFF4E6", color="#B26A2E", width=5.5
+  ];
+
+  // ── Pipeline steps ────────────────────────────────────────────────────────
+  s1 [
+    label="Step 1 — Free Disk Space\nsudo rm -rf /opt/hostedtoolcache/CodeQL\n  /opt/hostedtoolcache/Java* · /usr/local/lib/android\n  /usr/share/dotnet · /usr/share/swift · /usr/lib/jvm\n~25 GB freed → ~35–40 GB available for Yocto build",
+    fillcolor="#FEE2E2", color="#B91C1C"
+  ];
+
+  s2 [
+    label="Step 2 — Checkout Repository\nactions/checkout@v4\nSubmodules NOT initialized yet\n(deferred to avoid wasting time before cache check)",
+    fillcolor="#E7F0FF", color="#24507A"
+  ];
+
+  s3 [
+    label="Step 3 — Capture Submodule Revision Hash\ngit submodule status | awk '{print \$1}' | sort | sha256sum\n\nOutputs: steps.sub-hash.outputs.rev\nEnsures cache keys change when upstream layer pins change\n(not just when .gitmodules paths/URLs change)",
+    fillcolor="#FFF4E6", color="#B26A2E"
+  ];
+
+  s4 [
+    label="Step 4 — Login to GHCR\ndocker/login-action@v3\nRegistry: ghcr.io\nCredential: GITHUB_TOKEN  (auto-provided, no secrets needed)",
+    fillcolor="#EDE9FE", color="#6D28D9"
+  ];
+
+  s5 [
+    label="Step 5 — Restore Yocto Downloads Cache\nactions/cache@v4  →  .cache/yocto/downloads\n\nPrimary key:  yocto-dl-<OS>-<submod-rev>-<hash(conf/**)>\nFallback:     yocto-dl-<OS>-<submod-rev>-\n              yocto-dl-<OS>-",
+    fillcolor="#FEFCE8", color="#A16207"
+  ];
+
+  s6 [
+    label="Step 6 — Restore Yocto sstate Cache\nactions/cache@v4  →  .cache/yocto/sstate-cache\n\nPrimary key:  yocto-sstate-<OS>-<target>-<submod-rev>-<hash(recipes)>\nFallback:     yocto-sstate-<OS>-<target>-<submod-rev>-\n              yocto-sstate-<OS>-<target>-\n              yocto-sstate-<OS>-",
+    fillcolor="#FEFCE8", color="#A16207"
+  ];
+
+  s7 [
+    label="Step 7 — Initialize Submodules\ngit submodule update --init --recursive\nClones: sources/poky  +  sources/meta-openembedded\n(runs after cache restore; full clone only on cache miss)",
+    fillcolor="#E7F0FF", color="#24507A"
+  ];
+
+  s8 [
+    label="Step 8 — Run Yocto Build inside GHCR Container\ndocker run --rm\n  --volume \"\$GITHUB_WORKSPACE:/workspace\"\n  --workdir /workspace\n  --env BOOTSTRAP_PACKAGES=false\n  --env IMAGE_TARGET  --env CLEAN_BUILD\n  --env YOCTO_CENTRAL_CACHE_RSYNC\n  ghcr.io/<owner>/yocto-build-env:latest\n  bash scripts/remote-build.sh",
+    fillcolor="#D1FAE5", color="#065F46", width=5.5
+  ];
+
+  // Container internals cluster
+  subgraph cluster_container {
+    label="Inside the GHCR Container  (/workspace mounted from runner)";
+    style="rounded,dashed"; color="#34D399";
+    fontname="DejaVu Sans"; fontsize=14; fontcolor="#064E3B";
+
+    c1 [label="remote-build.sh — Environment setup\nsource sources/poky/oe-init-build-env build/",
+        fillcolor="#EAF8EE", color="#2D7A46", width=4.0];
+    c2 [label="Overwrite build/conf/local.conf\nDL_DIR = /workspace/.cache/yocto/downloads\nSSTATE_DIR = /workspace/.cache/yocto/sstate-cache\nBB_NUMBER_THREADS = \$(nproc)\nPARALLEL_MAKE = -j \$(nproc)",
+        fillcolor="#EAF8EE", color="#2D7A46", width=4.0];
+    c3 [label="Optional: sync caches from YOCTO_CENTRAL_CACHE_RSYNC\n(rsync pull before build · rsync push after build)",
+        fillcolor="#F0FDF4", color="#6EE7B7", style="rounded,filled,dashed", width=4.0];
+    c4 [label="bitbake  core-image-minimal\n(or IMAGE_TARGET from dispatch input)",
+        fillcolor="#86EFAC", color="#15803D", fontsize=15, width=4.0];
+    c5 [label="Stage outputs\nbuild/tmp/deploy/images/  →  out/images/\nWrite out/build-summary.txt",
+        fillcolor="#EAF8EE", color="#2D7A46", width=4.0];
+    c1 -> c2 -> c3 -> c4 -> c5;
+  }
+
+  s9 [
+    label="Step 9 — Collect Artifacts\nmkdir -p artifacts\ncp -a out/. artifacts/",
+    fillcolor="#F3F4F6", color="#5B6572"
+  ];
+
+  s10 [
+    label="Step 10 — Upload Artifacts\nactions/upload-artifact@v4\nName: yocto-images-remote-<github.run_number>\nPath: artifacts/   if-no-files-found: error",
+    fillcolor="#F3F4F6", color="#5B6572"
+  ];
+
+  s11 [
+    label="Post-Step — Save Updated Caches  (automatic)\nactions/cache saves downloads + sstate after job completes\nNew cache entries available for next workflow run",
+    fillcolor="#FEFCE8", color="#A16207"
+  ];
+
+  // ── External systems (side lane) ──────────────────────────────────────────
+  ghcr_img [
+    label="GHCR Image\nghcr.io/<owner>/yocto-build-env:latest",
+    fillcolor="#EDE9FE", color="#6D28D9", shape=cylinder, width=2.8
+  ];
+  cache_store [
+    label="GitHub Actions\nCache Store",
+    fillcolor="#FEFCE8", color="#A16207", shape=cylinder, width=2.0
+  ];
+  gh_artifacts [
+    label="GitHub Actions\nArtifacts Storage",
+    fillcolor="#F3F4F6", color="#5B6572", shape=cylinder, width=2.0
+  ];
+
+  // ── Main pipeline flow ────────────────────────────────────────────────────
+  trigger -> s1 -> s2 -> s3 -> s4 -> s5 -> s6 -> s7 -> s8;
+  s8 -> c1 [lhead=cluster_container, label="enters\ncontainer"];
+  c5 -> s9 [label="container\nexits"];
+  s9 -> s10 -> s11;
+
+  // ── Side interactions ─────────────────────────────────────────────────────
+  s4 -> ghcr_img      [style=dashed, color="#6D28D9", label="authenticate"];
+  s8 -> ghcr_img      [color="#6D28D9", label="docker pull\n+ run"];
+  s5 -> cache_store   [style=dashed, color="#A16207", dir=both, label="restore"];
+  s6 -> cache_store   [style=dashed, color="#A16207", dir=both, label="restore"];
+  s11 -> cache_store  [color="#A16207", label="save updated\ndownloads + sstate"];
+  s10 -> gh_artifacts [color="#5B6572", label="upload"];
+
+  // Force side nodes into a right-side column using invisible rank edges
+  { rank=same; s4; ghcr_img; }
+  { rank=same; s5; cache_store; }
+  { rank=same; s10; gh_artifacts; }
+}

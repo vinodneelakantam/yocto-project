@@ -14,9 +14,14 @@ This repo is the coordination hub and public frontend for your Yocto work.
 - Heavy Yocto builds run on external compute when GitHub/Codespaces resources are not enough.
 - Build outputs are returned to GitHub as artifacts for review/download.
 
-See the visual block diagram:
-- PNG: `docs/diagrams/repo-collaboration-block-diagram-v3.png`
-- Source: `docs/diagrams/repo-collaboration-block-diagram-v3.dot`
+See the visual block diagrams:
+
+| Diagram | PNG | DOT source |
+|---|---|---|
+| Architecture overview (top-level) | `docs/diagrams/architecture-overview.png` | `docs/diagrams/architecture-overview.dot` |
+| Remote CI pipeline (step-by-step) | `docs/diagrams/ci-remote-pipeline.png` | `docs/diagrams/ci-remote-pipeline.dot` |
+| GHCR image lifecycle | `docs/diagrams/ghcr-image-lifecycle.png` | `docs/diagrams/ghcr-image-lifecycle.dot` |
+| Cache strategy (three tiers) | `docs/diagrams/cache-layers.png` | `docs/diagrams/cache-layers.dot` |
 
 ## Repository Layout
 

@@ -1,0 +1,154 @@
+digraph CacheLayers {
+  graph [
+    label="Cache Strategy — Three-Tier Caching for Yocto Builds",
+    labelloc=t,
+    fontsize=24,
+    fontname="DejaVu Sans",
+    rankdir=TB,
+    bgcolor="white",
+    pad=0.6,
+    nodesep=1.0,
+    ranksep=1.1,
+    splines=spline
+  ];
+
+  node [
+    shape=box,
+    style="rounded,filled",
+    fontname="DejaVu Sans",
+    fontsize=13,
+    penwidth=1.5,
+    margin="0.22,0.14"
+  ];
+
+  edge [
+    color="#374151",
+    arrowsize=0.85,
+    penwidth=1.4,
+    fontname="DejaVu Sans",
+    fontsize=11
+  ];
+
+  // ── Header: the build job that uses all caches ─────────────────────────────
+  build_job [
+    label="remote-build job  (ubuntu-latest)\nBitBake running inside GHCR container",
+    fillcolor="#EAF8EE", color="#2D7A46", width=6.0
+  ];
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Tier 1 — Docker Layer Cache
+  // ══════════════════════════════════════════════════════════════════════════
+  subgraph cluster_tier1 {
+    label="Tier 1 — Docker Image Layer Cache";
+    style="rounded"; color="#C4B5FD";
+    fontname="DejaVu Sans"; fontsize=15; fontcolor="#5B21B6";
+
+    t1_what [
+      label="What is cached\n\nDocker image layers built by\n.devcontainer/Dockerfile:\n• Base ubuntu-24.04 layer\n• apt-get package install layer\n  (gcc, python3, chrpath, …)\n• Validation / sanity-check layer",
+      fillcolor="#EDE9FE", color="#6D28D9"
+    ];
+    t1_key [
+      label="Cache key\n\nAutomatically managed by\nDocker buildx (content hash\nof each layer)\n\nMechanism: type=gha\n(GitHub Actions cache backend)",
+      fillcolor="#F3E8FF", color="#9333EA"
+    ];
+    t1_bust [
+      label="Cache bust conditions\n\n• Dockerfile changes\n• bootstrap-worker-packages.sh changes\n• Weekly scheduled rebuild\n• Manual workflow_dispatch",
+      fillcolor="#EDE9FE", color="#6D28D9"
+    ];
+    t1_managed [
+      label="Managed by\n\npublish-build-image.yml\n(separate workflow,\nnot per-build-run)",
+      fillcolor="#EDE9FE", color="#6D28D9"
+    ];
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Tier 2 — Yocto Downloads Cache
+  // ══════════════════════════════════════════════════════════════════════════
+  subgraph cluster_tier2 {
+    label="Tier 2 — Yocto Downloads Cache  (.cache/yocto/downloads)";
+    style="rounded"; color="#FDE68A";
+    fontname="DejaVu Sans"; fontsize=15; fontcolor="#92400E";
+
+    t2_what [
+      label="What is cached\n\nSource tarballs, git snapshots,\nand upstream archives fetched\nby BitBake during do_fetch.\n\nRarely change once fetched.\nTypically 2–5 GB.",
+      fillcolor="#FEFCE8", color="#A16207"
+    ];
+    t2_key [
+      label="Cache key\n\nyocto-dl-<OS>\n  -<submod-rev-hash>\n  -<hash(conf/**)>\n\nFallback restore-keys:\n  yocto-dl-<OS>-<submod-rev>\n  yocto-dl-<OS>-",
+      fillcolor="#FEF9C3", color="#CA8A04"
+    ];
+    t2_bust [
+      label="Cache bust conditions\n\n• Upstream submodule pins change\n  (new poky / meta-oe commit)\n• conf/** files change\n  (e.g. DISTRO, MACHINE setting)\n\nFallback to older key on miss",
+      fillcolor="#FEFCE8", color="#A16207"
+    ];
+    t2_managed [
+      label="Managed by\n\nremote-yocto-build.yml\nactions/cache@v4\nPath: .cache/yocto/downloads\n\nRestored before build\nSaved after build (post-step)",
+      fillcolor="#FEFCE8", color="#A16207"
+    ];
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Tier 3 — Yocto sstate Cache
+  // ══════════════════════════════════════════════════════════════════════════
+  subgraph cluster_tier3 {
+    label="Tier 3 — Yocto sstate Cache  (.cache/yocto/sstate-cache)";
+    style="rounded"; color="#A7F3D0";
+    fontname="DejaVu Sans"; fontsize=15; fontcolor="#064E3B";
+
+    t3_what [
+      label="What is cached\n\nShared-state: pre-compiled\nbuild objects per recipe and task.\nBitBake skips recompiling when\na matching sstate object is found.\n\nLargest cache: 5–20 GB.\nHigh ROI on incremental builds.",
+      fillcolor="#EAF8EE", color="#2D7A46"
+    ];
+    t3_key [
+      label="Cache key\n\nyocto-sstate-<OS>\n  -<IMAGE_TARGET>\n  -<submod-rev-hash>\n  -<hash(conf/** + *.bb\n       + *.bbappend\n       + *.bbclass)>\n\nFallback restore-keys:\n  ...target+submod-rev\n  ...target\n  ...<OS>-",
+      fillcolor="#D1FAE5", color="#059669"
+    ];
+    t3_bust [
+      label="Cache bust conditions\n\n• Any recipe (.bb/.bbappend) changes\n• BitBake class (.bbclass) changes\n• Upstream submodule pin changes\n• IMAGE_TARGET changes\n• conf/** changes\n\nFallback to partial match",
+      fillcolor="#EAF8EE", color="#2D7A46"
+    ];
+    t3_managed [
+      label="Managed by\n\nremote-yocto-build.yml\nactions/cache@v4\nPath: .cache/yocto/sstate-cache\n\nRestored before build\nSaved after build (post-step)",
+      fillcolor="#EAF8EE", color="#2D7A46"
+    ];
+  }
+
+  // ── Optional: Central rsync cache ─────────────────────────────────────────
+  rsync_cache [
+    label="Optional: Central rsync Cache Server\nYOCTO_CENTRAL_CACHE_RSYNC env var\n\nrsync pull before build (downloads + sstate)\nrsync push after build\n\nShared across Codespaces, VPS workers,\nand any environment with rsync access",
+    fillcolor="#F0FDF4", color="#6EE7B7",
+    style="rounded,filled,dashed", width=4.5
+  ];
+
+  // ── Submodule hash computation ─────────────────────────────────────────────
+  submod_hash [
+    label="Submodule Revision Hash\n\ngit submodule status | awk '{print \$1}' | sort | sha256sum\n\nCaptures: exact commit SHAs of\n  sources/poky  +  sources/meta-openembedded\nChanges when upstream layer is pinned to a new commit",
+    fillcolor="#FFF4E6", color="#B26A2E", width=5.5
+  ];
+
+  // ── Impact summary ─────────────────────────────────────────────────────────
+  impact [
+    label="Build time impact\n\nCold start (all caches miss):\n  ~90–180 min  (full Yocto build)\nWarm start (all caches hit, recipe unchanged):\n  ~5–10 min   (bitbake runs, skips all cached tasks)\nPartial hit (some recipes changed):\n  minutes saved proportional to unchanged recipes",
+    fillcolor="#F3F4F6", color="#5B6572", width=5.5
+  ];
+
+  // ── Edges ─────────────────────────────────────────────────────────────────
+  submod_hash -> build_job  [style=invis];   // alignment helper
+
+  t1_what -> build_job  [label="docker pull uses\ncached layers"];
+  t2_what -> build_job  [label="BitBake reads\nDL_DIR"];
+  t3_what -> build_job  [label="BitBake reads\nSSTATE_DIR"];
+
+  build_job -> t2_what  [label="BitBake writes\nnew fetched sources", style=dashed, color="#A16207"];
+  build_job -> t3_what  [label="BitBake writes\nnew sstate objects", style=dashed, color="#2D7A46"];
+  build_job -> rsync_cache [label="optional sync\n(pull before / push after)", style=dashed, color="#6EE7B7"];
+  build_job -> impact;
+
+  submod_hash -> t2_key  [label="included\nin key", color="#B26A2E"];
+  submod_hash -> t3_key  [label="included\nin key", color="#B26A2E"];
+
+  { rank=same; t1_what; t2_what; t3_what; }
+  { rank=same; t1_key;  t2_key;  t3_key;  }
+  { rank=same; t1_bust; t2_bust; t3_bust; }
+  { rank=same; t1_managed; t2_managed; t3_managed; }
+}

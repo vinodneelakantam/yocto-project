@@ -1,0 +1,116 @@
+digraph GHCRImageLifecycle {
+  graph [
+    label="GHCR Build Image Lifecycle — publish-build-image.yml",
+    labelloc=t,
+    fontsize=24,
+    fontname="DejaVu Sans",
+    rankdir=LR,
+    bgcolor="white",
+    pad=0.6,
+    nodesep=0.75,
+    ranksep=1.3,
+    splines=spline,
+    compound=true
+  ];
+
+  node [
+    shape=box,
+    style="rounded,filled",
+    fontname="DejaVu Sans",
+    fontsize=13,
+    penwidth=1.5,
+    margin="0.22,0.14"
+  ];
+
+  edge [
+    color="#374151",
+    arrowsize=0.85,
+    penwidth=1.4,
+    fontname="DejaVu Sans",
+    fontsize=11
+  ];
+
+  // ── Triggers ──────────────────────────────────────────────────────────────
+  subgraph cluster_triggers {
+    label="Image Rebuild Triggers";
+    style="rounded,dashed"; color="#FCA5A5";
+    fontname="DejaVu Sans"; fontsize=14; fontcolor="#991B1B";
+
+    t1 [label=".devcontainer/Dockerfile  changed\n(push to main)", fillcolor="#FEE2E2", color="#B91C1C"];
+    t2 [label="scripts/bootstrap-worker-packages.sh  changed\n(push to main)", fillcolor="#FEE2E2", color="#B91C1C"];
+    t3 [label="scripts/devcontainer-sanity-check.sh  changed\n(push to main)", fillcolor="#FEE2E2", color="#B91C1C"];
+    t4 [label="Weekly schedule\nEvery Sunday 02:00 UTC\n(picks up upstream OS security patches)", fillcolor="#FEF3C7", color="#D97706"];
+    t5 [label="Manual: workflow_dispatch\n(force rebuild on demand)", fillcolor="#FFF4E6", color="#B26A2E"];
+  }
+
+  // ── Build workflow ─────────────────────────────────────────────────────────
+  subgraph cluster_build {
+    label="publish-build-image.yml  —  ubuntu-latest runner";
+    style="rounded,dashed"; color="#C4B5FD";
+    fontname="DejaVu Sans"; fontsize=14; fontcolor="#5B21B6";
+
+    b1 [label="Checkout repository\nactions/checkout@v4", fillcolor="#EDE9FE", color="#6D28D9"];
+    b2 [label="Set up Docker Buildx\ndocker/setup-buildx-action@v3", fillcolor="#EDE9FE", color="#6D28D9"];
+    b3 [label="Login to GHCR\ndocker/login-action@v3\nCredential: GITHUB_TOKEN", fillcolor="#EDE9FE", color="#6D28D9"];
+    b4 [label="Extract image metadata\ndocker/metadata-action@v5\nTags: latest · sha-<short> · weekly-YYYYMMDD",
+        fillcolor="#EDE9FE", color="#6D28D9"];
+    b5 [label="Build and Push image\ndocker/build-push-action@v6\nContext: .  (repo root)\nFile: .devcontainer/Dockerfile\ncache-from: type=gha\ncache-to:   type=gha,mode=max",
+        fillcolor="#7C3AED", color="#4C1D95", fontcolor="white"];
+    b1 -> b2 -> b3 -> b4 -> b5;
+  }
+
+  // ── Dockerfile contents ───────────────────────────────────────────────────
+  subgraph cluster_dockerfile {
+    label=".devcontainer/Dockerfile  (build context)";
+    style="rounded,dashed"; color="#93C5FD";
+    fontname="DejaVu Sans"; fontsize=14; fontcolor="#1E40AF";
+
+    df1 [label="FROM mcr.microsoft.com/devcontainers/base:ubuntu-24.04\n(official Microsoft devcontainer base image)", fillcolor="#DBEAFE", color="#1D4ED8"];
+    df2 [label="COPY scripts/bootstrap-worker-packages.sh\n       scripts/devcontainer-sanity-check.sh\n  →  /tmp/scripts/", fillcolor="#E7F0FF", color="#24507A"];
+    df3 [label="RUN bootstrap-worker-packages.sh\n\nInstalls: gawk · wget · git · diffstat · unzip\ntexinfo · gcc · build-essential · chrpath\nsocat · cpio · python3 · python3-pip\npython3-pexpect · xz-utils · debianutils\nrsync · file · lz4 · zstd · xterm · …",
+        fillcolor="#EAF8EE", color="#2D7A46", width=3.5];
+    df4 [label="RUN sanity-check.sh\nVerifies all tools are present\nand in PATH", fillcolor="#EAF8EE", color="#2D7A46"];
+    df1 -> df2 -> df3 -> df4;
+  }
+
+  // ── Layer cache ────────────────────────────────────────────────────────────
+  layer_cache [
+    label="GitHub Actions Layer Cache\ntype=gha  (Docker buildx)\n\nEach Dockerfile layer cached separately:\n• Base image pull\n• apt-get package layer\n• Script-run validation layer\n\nOnly changed layers rebuild on next push",
+    fillcolor="#FEFCE8", color="#A16207", shape=cylinder, width=3.0
+  ];
+
+  // ── GHCR registry ─────────────────────────────────────────────────────────
+  subgraph cluster_ghcr {
+    label="GHCR  (GitHub Container Registry)";
+    style="rounded,dashed"; color="#A78BFA";
+    fontname="DejaVu Sans"; fontsize=14; fontcolor="#5B21B6";
+
+    ghcr_latest [label="yocto-build-env:latest\n(always points to newest main build)", fillcolor="#EDE9FE", color="#6D28D9", shape=cylinder];
+    ghcr_sha    [label="yocto-build-env:sha-<abcdef>\n(immutable per-commit tag)", fillcolor="#EDE9FE", color="#6D28D9", shape=cylinder];
+    ghcr_weekly [label="yocto-build-env:weekly-YYYYMMDD\n(weekly scheduled rebuild)", fillcolor="#F3E8FF", color="#9333EA", shape=cylinder];
+  }
+
+  // ── Consumers ─────────────────────────────────────────────────────────────
+  consumer_ci [
+    label="remote-build CI job\n(remote-yocto-build.yml)\n\ndocker pull :latest\ndocker run --volume workspace:/workspace",
+    fillcolor="#EAF8EE", color="#2D7A46"
+  ];
+  consumer_codespace [
+    label="GitHub Codespace\n(.devcontainer/devcontainer.json)\n\nPrebuilt container image\n16 CPU · 32 GB RAM · 128 GB disk",
+    fillcolor="#F0FDF4", color="#6EE7B7", style="rounded,filled,dashed"
+  ];
+
+  // ── Edges ─────────────────────────────────────────────────────────────────
+  { t1; t2; t3; t4; t5; } -> b1 [color="#B91C1C"];
+
+  b5 -> layer_cache [dir=both, label="cache from/to"];
+  df4 -> b5         [ltail=cluster_dockerfile,
+                     label="Dockerfile\nbuild steps", style=dashed, color="#93C5FD"];
+
+  b5 -> ghcr_latest  [label="push :latest"];
+  b5 -> ghcr_sha     [label="push :sha-*"];
+  b5 -> ghcr_weekly  [label="push :weekly-*\n(scheduled only)"];
+
+  ghcr_latest -> consumer_ci         [label="docker pull\n+ run"];
+  ghcr_latest -> consumer_codespace  [label="prebuild\nimage", style=dashed];
+}

@@ -1,0 +1,138 @@
+digraph ArchitectureOverview {
+  graph [
+    label="Yocto Build System — Architecture Overview",
+    labelloc=t,
+    fontsize=28,
+    fontname="DejaVu Sans",
+    rankdir=LR,
+    bgcolor="white",
+    pad=0.6,
+    nodesep=0.9,
+    ranksep=1.5,
+    splines=spline,
+    compound=true
+  ];
+
+  node [
+    shape=box,
+    style="rounded,filled",
+    fontname="DejaVu Sans",
+    fontsize=13,
+    penwidth=1.5,
+    margin="0.22,0.14"
+  ];
+
+  edge [
+    color="#374151",
+    arrowsize=0.85,
+    penwidth=1.4,
+    fontname="DejaVu Sans",
+    fontsize=11
+  ];
+
+  // ── Column 1: Developer ───────────────────────────────────────────────────
+  dev [
+    label="Developer / Team\n\ngit push to main\nor workflow_dispatch",
+    fillcolor="#FFF4E6", color="#B26A2E"
+  ];
+
+  // ── Column 2: GitHub Repository ──────────────────────────────────────────
+  subgraph cluster_repo {
+    label="GitHub Repository  (vinodneelakantam/yocto-project)";
+    style="rounded,dashed"; color="#93C5FD";
+    fontname="DejaVu Sans"; fontsize=15; fontcolor="#1E40AF";
+
+    repo_layers [
+      label="layers/\nmeta-portfolio · meta-security · meta-ota\n\nconf/ + scripts/",
+      fillcolor="#E7F0FF", color="#24507A"
+    ];
+    repo_sub [
+      label="sources/  (Git submodules, pinned)\nsources/poky  (yoctoproject/poky)\nsources/meta-openembedded",
+      fillcolor="#DBEAFE", color="#1D4ED8"
+    ];
+  }
+
+  // ── Column 3: Workflows ───────────────────────────────────────────────────
+  subgraph cluster_workflows {
+    label="GitHub Actions Workflows";
+    style="rounded,dashed"; color="#C4B5FD";
+    fontname="DejaVu Sans"; fontsize=15; fontcolor="#5B21B6";
+
+    wf_img [
+      label="publish-build-image.yml\n\nBuilds and pushes the Yocto\nbuild-environment Docker image\n\nTriggers: Dockerfile change\n   weekly cron · manual dispatch",
+      fillcolor="#EDE9FE", color="#6D28D9"
+    ];
+    wf_build [
+      label="remote-yocto-build.yml\n\nOrchestrates both build jobs:\n  remote-build  (primary CI)\n  local-build   (Codespace, opt-in)\n\nTriggers: push to main · dispatch",
+      fillcolor="#E7F0FF", color="#24507A"
+    ];
+  }
+
+  // ── Column 4: GHCR Image ─────────────────────────────────────────────────
+  ghcr [
+    label="GHCR Container Image\nghcr.io/<owner>/yocto-build-env:latest\n\nPre-installed Yocto build tools:\ngcc · make · python3 · chrpath\ndiffstat · rsync · xterm · gawk\nzstd · lz4 · cpio · xz-utils · …\n\nBuilt from .devcontainer/Dockerfile\nTagged: latest · sha-<short> · weekly-*",
+    fillcolor="#EDE9FE", color="#6D28D9",
+    shape=cylinder, width=2.8
+  ];
+
+  // ── Column 5: Cache ───────────────────────────────────────────────────────
+  subgraph cluster_cache {
+    label="GitHub Actions Cache  (persistent across runs)";
+    style="rounded,dashed"; color="#FDE68A";
+    fontname="DejaVu Sans"; fontsize=15; fontcolor="#92400E";
+
+    c_docker [
+      label="Docker Layer Cache\ntype=gha  (Docker buildx)\n\nContents: apt packages + tools\nManaged by: publish-build-image.yml",
+      fillcolor="#FEFCE8", color="#A16207", shape=cylinder
+    ];
+    c_dl [
+      label="Yocto Downloads Cache\n.cache/yocto/downloads\n\nContents: upstream source tarballs\nKey: submod-rev + conf/**",
+      fillcolor="#FEFCE8", color="#A16207", shape=cylinder
+    ];
+    c_ss [
+      label="Yocto sstate Cache\n.cache/yocto/sstate-cache\n\nContents: pre-compiled build objects\nKey: submod-rev + target + recipes",
+      fillcolor="#FEFCE8", color="#A16207", shape=cylinder
+    ];
+  }
+
+  // ── Column 6: Build Jobs ──────────────────────────────────────────────────
+  subgraph cluster_jobs {
+    label="Build Execution";
+    style="rounded,dashed"; color="#A7F3D0";
+    fontname="DejaVu Sans"; fontsize=15; fontcolor="#064E3B";
+
+    job_remote [
+      label="remote-build  (primary)\nubuntu-latest GitHub-hosted runner\n\nBitBake runs inside GHCR container\nNo apt installs at build time\nDisk cleanup frees ~25 GB before build",
+      fillcolor="#EAF8EE", color="#2D7A46"
+    ];
+    job_cs [
+      label="local-build  (opt-in)\nSelf-hosted Codespace runner\nPrebuilt devcontainer (16 CPU / 32 GB)\n\nManual dispatch only\n(run_codespace = true)",
+      fillcolor="#F0FDF4", color="#6EE7B7",
+      style="rounded,filled,dashed"
+    ];
+  }
+
+  // ── Column 7: Outputs ─────────────────────────────────────────────────────
+  artifacts [
+    label="GitHub Actions Artifacts\n\nyocto-images-remote-<run>\nyocto-images-codespace-<run>\n\nImages · kernel · rootfs · build summary",
+    fillcolor="#F3F4F6", color="#5B6572"
+  ];
+
+  // ── Edges ─────────────────────────────────────────────────────────────────
+  dev -> repo_layers         [label="git push"];
+  repo_layers -> wf_img      [label="Dockerfile\nor script change"];
+  repo_layers -> wf_build    [label="on push\nto main"];
+
+  wf_img -> c_docker         [dir=both, label="layer cache\nbuildx gha"];
+  wf_img -> ghcr             [label="docker build\n+ push"];
+
+  wf_build -> job_remote;
+  wf_build -> job_cs         [style=dashed, label="run_codespace\n= true only"];
+
+  ghcr -> job_remote         [label="docker pull\n+ run --volume"];
+  c_dl -> job_remote         [dir=both, label="restore\n/ save"];
+  c_ss -> job_remote         [dir=both, label="restore\n/ save"];
+
+  job_remote -> artifacts;
+  job_cs -> artifacts        [style=dashed];
+}
