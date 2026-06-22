@@ -37,6 +37,8 @@ See the visual block diagrams:
 - Contributor onboarding: `docs/onboarding-checklist.md`
 - Cloud worker placeholder plan: `docs/cloud/aws-spot-worker-plan.md`
 - Local build instructions: `docs/local-build.md`
+- Release model: `docs/release-model.md`
+- Operations playbook: `docs/operations-playbook.md`
 
 ## What This Repository Does (Detailed)
 
@@ -52,7 +54,15 @@ This repository is a **Yocto build orchestrator and showcase**, not a full mirro
 
 ### End-to-end workflow
 
-Two parallel jobs run on every push to `main` (or manual dispatch):
+Multi-stage CI model:
+
+1. PR validation (`.github/workflows/pr-validation.yml`)
+2. Integration build (`.github/workflows/remote-yocto-build.yml`)
+3. Nightly full build (`.github/workflows/nightly-full-build.yml`)
+4. Release build with compliance gate (`.github/workflows/release-build.yml`)
+5. Artifact promotion (`.github/workflows/artifact-promotion.yml`)
+
+Within integration build workflow, two parallel jobs run on dispatch:
 
 **Remote build — primary CI path (GitHub-hosted runner + Docker):**
 1. A change is pushed to `main` or the workflow is dispatched.

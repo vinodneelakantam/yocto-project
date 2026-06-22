@@ -2,9 +2,14 @@
 
 - `remote-build.sh`: Runs BitBake on remote compute and stages outputs in `out/`
 - `bootstrap-worker-packages.sh`: Installs required Yocto build dependencies on Debian/Ubuntu workers
+- `generate-build-metadata.sh`: Writes reproducibility metadata (commit, submodules, image digests) into `out/metadata/`
+- `qemu-smoke-test.sh`: Runs a QEMU smoke-test lane (or marks skipped) and writes results into `out/smoke-tests/`
+- `security/generate-compliance-report.sh`: Generates SBOM/license/CVE summary artifacts into `out/compliance/`
+- `security/cve-gate.sh`: Release gate that fails promotion on high/critical CVE status or missing CVE summary
 - `github/create-repo.sh`: Creates a GitHub repo from this directory and pushes it
 - `github/set-secrets.sh`: Configures required GitHub Actions secrets via `gh`
 - `github/run-workflow-once.sh`: Triggers `remote-yocto-build.yml` once and watches it
+- `github/promote-artifact.sh`: Downloads a build artifact from a source run and repackages it for environment promotion
 - `github/install-gh-from-github.sh`: Downloads `gh` from official GitHub Releases into `.tmp/`, verifies checksum, and installs to `.local/bin/gh`
 - `cloud/aws-spot-build-placeholder.sh`: Placeholder interface for future AWS Spot worker lifecycle automation
 

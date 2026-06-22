@@ -1,0 +1,76 @@
+name: Release Build
+
+on:
+  push:
+    branches: ["release/**", "hotfix/**"]
+  workflow_dispatch:
+    inputs:
+      image:
+        description: "BitBake image target"
+        required: false
+        default: "core-image-minimal"
+      allow_missing_cve_report:
+        description: "Allow promotion when CVE report is missing"
+        type: boolean
+        required: false
+        default: false
+
+env:
+  IMAGE_TARGET: ${{ inputs.image || 'core-image-minimal' }}
+
+jobs:
+  release-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Initialize submodules
+        run: git submodule update --init --recursive
+
+      - name: Build release artifact
+        env:
+          CLEAN_BUILD: "true"
+          YOCTO_CENTRAL_CACHE_RSYNC: ${{ secrets.YOCTO_CENTRAL_CACHE_RSYNC }}
+        run: |
+          set -euo pipefail
+          chmod +x scripts/remote-build.sh scripts/generate-build-metadata.sh \
+            scripts/security/generate-compliance-report.sh scripts/security/cve-gate.sh \
+            scripts/qemu-smoke-test.sh
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            --env HOME=/workspace \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            --workdir /workspace \
+            --env BOOTSTRAP_PACKAGES=false \
+            --env IMAGE_TARGET="$IMAGE_TARGET" \
+            --env CLEAN_BUILD="$CLEAN_BUILD" \
+            --env YOCTO_CENTRAL_CACHE_RSYNC="${YOCTO_CENTRAL_CACHE_RSYNC:-}" \
+            ghcr.io/${{ github.repository_owner }}/yocto-build-env:latest \
+            bash scripts/remote-build.sh "$IMAGE_TARGET" "$CLEAN_BUILD"
+          ./scripts/generate-build-metadata.sh out "$IMAGE_TARGET"
+          ./scripts/security/generate-compliance-report.sh out
+          ./scripts/qemu-smoke-test.sh out
+
+      - name: CVE gate before release artifact publication
+        env:
+          ALLOW_MISSING_CVE_REPORT: ${{ inputs.allow_missing_cve_report && 'true' || 'false' }}
+        run: ./scripts/security/cve-gate.sh out
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: yocto-release-candidate-${{ github.run_number }}
+          path: out
+          if-no-files-found: error

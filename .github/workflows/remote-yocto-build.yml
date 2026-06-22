@@ -2,7 +2,7 @@ name: Yocto Build
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "release/**"]
   workflow_dispatch:
     inputs:
       image:
@@ -145,8 +145,19 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x scripts/local-build.sh scripts/remote-build.sh \
-            scripts/bootstrap-worker-packages.sh scripts/devcontainer-sanity-check.sh
+            scripts/bootstrap-worker-packages.sh scripts/devcontainer-sanity-check.sh \
+            scripts/generate-build-metadata.sh scripts/security/generate-compliance-report.sh \
+            scripts/qemu-smoke-test.sh
           ./scripts/local-build.sh "$IMAGE_TARGET" "$CLEAN_BUILD"
+
+      - name: Generate build metadata
+        run: ./scripts/generate-build-metadata.sh out "$IMAGE_TARGET"
+
+      - name: Generate compliance artifacts
+        run: ./scripts/security/generate-compliance-report.sh out
+
+      - name: Run QEMU smoke test lane
+        run: ./scripts/qemu-smoke-test.sh out
 
       - name: Collect artifacts
         run: |
@@ -258,6 +269,15 @@ jobs:
             --env YOCTO_CENTRAL_CACHE_RSYNC="${YOCTO_CENTRAL_CACHE_RSYNC:-}" \
             ghcr.io/${{ github.repository_owner }}/yocto-build-env:latest \
             bash scripts/remote-build.sh "$IMAGE_TARGET" "$CLEAN_BUILD"
+
+      - name: Generate build metadata
+        run: ./scripts/generate-build-metadata.sh out "$IMAGE_TARGET"
+
+      - name: Generate compliance artifacts
+        run: ./scripts/security/generate-compliance-report.sh out
+
+      - name: Run QEMU smoke test lane
+        run: ./scripts/qemu-smoke-test.sh out
 
       - name: Collect artifacts
         run: |

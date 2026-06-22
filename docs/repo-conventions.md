@@ -19,6 +19,8 @@ This repository is the single control plane for Yocto recipes/apps and build vis
 - New recipes use lowercase names and standard Yocto layout.
 - New automation scripts use kebab-case and include a short README note.
 - Diagram/source docs use descriptive suffixes with version only when replacing an old variant.
+- Release branches use `release/<version>`.
+- Hotfix branches use `hotfix/<version>-<topic>`.
 
 ## Change Rules
 

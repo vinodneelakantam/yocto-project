@@ -1,0 +1,48 @@
+name: Artifact Promotion
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: "Workflow run ID containing the source artifact"
+        required: true
+      source_artifact_name:
+        description: "Artifact name to promote"
+        required: true
+      target_environment:
+        description: "Promotion target environment"
+        required: true
+        type: choice
+        options:
+          - dev
+          - qa
+          - prod
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Prepare promoted artifact
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          chmod +x scripts/github/promote-artifact.sh
+          ./scripts/github/promote-artifact.sh \
+            "${{ inputs.source_run_id }}" \
+            "${{ inputs.source_artifact_name }}" \
+            "${{ inputs.target_environment }}"
+
+      - name: Upload promoted artifact package
+        uses: actions/upload-artifact@v4
+        with:
+          name: yocto-promoted-${{ inputs.target_environment }}-${{ github.run_number }}
+          path: out/promotion
+          if-no-files-found: error

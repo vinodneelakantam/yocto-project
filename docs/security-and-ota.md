@@ -20,3 +20,10 @@
 - Enforce least privilege and secure defaults
 - Enable kernel hardening options where compatible
 - Add regular vulnerability scans in release process
+
+## CI Compliance Baseline
+
+- Generate build metadata on every CI build (`out/metadata/build-metadata.json`)
+- Publish SBOM and license manifest in `out/compliance/`
+- Enforce CVE gate before release artifact publication
+- Run QEMU smoke test lane and include results in release artifacts

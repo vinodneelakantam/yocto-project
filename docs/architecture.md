@@ -31,7 +31,15 @@ For visual summaries, see:
 
 ## Build Data Flow
 
-Two jobs run in parallel on every push to `main`:
+Primary multi-stage model:
+
+1. PR validation (`pr-validation.yml`) for fast feedback.
+2. Integration build (`remote-yocto-build.yml`) on `main` and `release/*`.
+3. Nightly full rebuild (`nightly-full-build.yml`) with clean build mode.
+4. Release build (`release-build.yml`) with compliance and CVE gate.
+5. Artifact promotion (`artifact-promotion.yml`) from `dev` to `qa` to `prod`.
+
+`remote-yocto-build.yml` has two jobs (parallel-capable):
 
 **Remote build (primary — GitHub-hosted runner):**
 1. Push to `main` triggers the `remote-build` job.
@@ -90,3 +98,9 @@ scripts but runs directly inside the prebuilt devcontainer environment.
   prefix manually or run with `clean=true` to force a full rebuild.
 - Codespace runner not active: `local-build` job will stay queued until the
   Codespace is started; it is opt-in to avoid blocking the workflow.
+
+## Reproducibility Controls
+
+- Build metadata file captures commit SHA, submodule pins, target, and image digests.
+- Upstream sources remain pinned by submodule commit.
+- Release promotions move immutable artifacts between environments (no rebuild).

@@ -1,0 +1,33 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches: ["main", "release/**"]
+
+jobs:
+  fast-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Validate shell scripts
+        run: find scripts -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
+
+      - name: Validate devcontainer JSON
+        run: python -m json.tool .devcontainer/devcontainer.json >/dev/null
+
+      - name: Validate release branch naming for PRs
+        if: startsWith(github.head_ref, 'release/') || startsWith(github.head_ref, 'hotfix/')
+        run: |
+          if [[ "${GITHUB_BASE_REF}" != "main" && "${GITHUB_BASE_REF}" != release/* ]]; then
+            echo "release/* and hotfix/* branches can only target main or release/*."
+            exit 1
+          fi
+
+      - name: Check submodule pin consistency
+        run: |
+          set -euo pipefail
+          git submodule status --recursive
