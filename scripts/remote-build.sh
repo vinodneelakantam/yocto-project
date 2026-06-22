@@ -94,6 +94,15 @@ if [[ -f "$LOCAL_CONF" ]]; then
   if ! grep -q '^SSTATE_DIR\s*=' "$LOCAL_CONF"; then
     printf 'SSTATE_DIR = "%s"\n' "$SSTATE_DIR" >> "$LOCAL_CONF"
   fi
+  # Auto-tune parallelism to the actual worker core count.
+  # nproc reflects what the OS reports (Codespace vCPUs, runner CPUs, etc.).
+  _NCPUS="$(nproc)"
+  if ! grep -q '^BB_NUMBER_THREADS\s*=' "$LOCAL_CONF"; then
+    printf 'BB_NUMBER_THREADS = "%s"\n' "$_NCPUS" >> "$LOCAL_CONF"
+  fi
+  if ! grep -q '^PARALLEL_MAKE\s*=' "$LOCAL_CONF"; then
+    printf 'PARALLEL_MAKE = "-j %s"\n' "$_NCPUS" >> "$LOCAL_CONF"
+  fi
 fi
 
 if [[ "$CLEAN_BUILD" == "true" ]]; then

@@ -3,6 +3,13 @@
 
 MACHINE ??= "qemux86-64"
 DISTRO ?= "poky"
+
+# Parallel build tuning.
+# Let BitBake auto-detect the available CPU count so this file works on any
+# machine size (8-core Codespace, 16-core Codespace, remote worker, etc.).
+# Override these to a fixed value if you need to cap resource usage.
+BB_NUMBER_THREADS ?= "${@oe.utils.cpu_count()}"
+PARALLEL_MAKE ?= "-j ${@oe.utils.cpu_count()}"
 PACKAGE_CLASSES ?= "package_rpm"
 EXTRA_IMAGE_FEATURES ?= "debug-tweaks"
 USER_CLASSES ?= "buildstats"
