@@ -13,67 +13,82 @@ on:
         description: "Run bitbake -c cleansstate before build"
         required: false
         default: "false"
+      run_codespace:
+        description: "Also run the Codespace self-hosted job (requires an active Codespace runner)"
+        type: boolean
+        required: false
+        default: false
+
+# Workflow-level defaults — jobs inherit these and can override.
+env:
+  IMAGE_TARGET: ${{ inputs.image || 'core-image-minimal' }}
+  CLEAN_BUILD: ${{ inputs.clean || 'false' }}
 
 jobs:
+  # ─────────────────────────────────────────────────────────────────────────
+  # Job 1 — Codespace / self-hosted local build (opt-in).
+  #
+  # Only runs on manual dispatch when run_codespace=true, so the workflow
+  # does not stay queued indefinitely when no Codespace runner is active.
+  #
+  # One-time Codespace runner setup:
+  #   mkdir ~/actions-runner && cd ~/actions-runner
+  #   curl -fsSL https://github.com/actions/runner/releases/latest/download/actions-runner-linux-x64.tar.gz | tar xz
+  #   ./config.sh --url https://github.com/vinodneelakantam/yocto-project \
+  #               --token <Settings → Actions → Runners → New self-hosted runner> \
+  #               --labels codespace-yocto --name codespace-runner --unattended
+  #   ./run.sh &
+  # ─────────────────────────────────────────────────────────────────────────
   local-build:
-    # Runs on a self-hosted runner registered inside a GitHub Codespace.
-    #
-    # SETUP (one-time, inside your Codespace terminal):
-    #   mkdir ~/actions-runner && cd ~/actions-runner
-    #   curl -sL https://github.com/actions/runner/releases/latest/download/actions-runner-linux-x64-2.321.0.tar.gz | tar xz
-    #   ./config.sh --url https://github.com/vinodneelakantam/yocto-project \
-    #               --token <token from Settings → Actions → Runners → New self-hosted runner> \
-    #               --labels codespace-yocto --name codespace-runner --unattended
-    #   ./run.sh &
-    #
-    # Pick a Codespace machine with ≥16 cores for fast parallel Yocto builds.
-    # The runner must be active (Codespace running) when this workflow triggers.
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_codespace == true }}
     runs-on: [self-hosted, linux, codespace-yocto]
     timeout-minutes: 360
     env:
-      IMAGE_TARGET: ${{ github.event.inputs.image || 'core-image-minimal' }}
-      CLEAN_BUILD: ${{ github.event.inputs.clean || 'false' }}
-      # Tools are already installed in the Codespace devcontainer — skip apt bootstrap.
+      # Tools are pre-installed in the devcontainer image — skip apt bootstrap.
       BOOTSTRAP_PACKAGES: "false"
       YOCTO_CENTRAL_CACHE_RSYNC: ${{ secrets.YOCTO_CENTRAL_CACHE_RSYNC }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
+
+      - name: Capture submodule revision hash
+        # Hash all pinned submodule commit SHAs so the cache key is sensitive
+        # to upstream layer pin changes, not just .gitmodules path/URL changes.
+        id: sub-hash
+        run: |
+          echo "rev=$(git submodule status | awk '{print $1}' | sort | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
 
       - name: Restore Yocto downloads cache
-        # DL_DIR: source tarballs fetched by BitBake — rarely change, huge time saver.
         uses: actions/cache@v4
         with:
           path: .cache/yocto/downloads
-          key: yocto-dl-${{ runner.os }}-${{ hashFiles('.gitmodules', 'conf/**') }}
+          key: yocto-dl-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('conf/**') }}
           restore-keys: |
+            yocto-dl-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-
             yocto-dl-${{ runner.os }}-
 
       - name: Restore Yocto sstate cache
-        # SSTATE_DIR: incremental build artefacts — avoids recompiling unchanged packages.
-        # Key is scoped to recipe files only (.bb/.bbappend/.bbclass) so documentation
-        # or README changes inside layers do not trigger unnecessary cache invalidation.
         uses: actions/cache@v4
         with:
           path: .cache/yocto/sstate-cache
-          key: yocto-sstate-${{ runner.os }}-${{ env.IMAGE_TARGET }}-${{ hashFiles('.gitmodules', 'conf/**', 'layers/**/*.bb', 'layers/**/*.bbappend', 'layers/**/*.bbclass') }}
+          key: yocto-sstate-${{ runner.os }}-${{ env.IMAGE_TARGET }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('conf/**', 'layers/**/*.bb', 'layers/**/*.bbappend', 'layers/**/*.bbclass') }}
           restore-keys: |
+            yocto-sstate-${{ runner.os }}-${{ env.IMAGE_TARGET }}-${{ steps.sub-hash.outputs.rev }}-
             yocto-sstate-${{ runner.os }}-${{ env.IMAGE_TARGET }}-
             yocto-sstate-${{ runner.os }}-
 
+      - name: Initialize submodules
+        run: git submodule update --init --recursive
+
       - name: Run Yocto build
-        # The runner lives inside the Codespace devcontainer, so all tools are
-        # pre-installed and no container wrapper is needed.
         run: |
           set -euo pipefail
           chmod +x scripts/local-build.sh scripts/remote-build.sh \
             scripts/bootstrap-worker-packages.sh scripts/devcontainer-sanity-check.sh
           ./scripts/local-build.sh "$IMAGE_TARGET" "$CLEAN_BUILD"
 
-      - name: Collect local artifacts
+      - name: Collect artifacts
         run: |
           set -euo pipefail
           mkdir -p artifacts
@@ -82,6 +97,114 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: yocto-images-${{ github.run_number }}
+          name: yocto-images-codespace-${{ github.run_number }}
+          path: artifacts
+          if-no-files-found: error
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Job 2 — Remote build on a GitHub-hosted runner (primary CI path).
+  #
+  # All Yocto build tools come from the pre-built GHCR image
+  # (ghcr.io/<owner>/yocto-build-env:latest) — no apt-get at build time.
+  # Docker layer cache is managed by publish-build-image.yml.
+  # Yocto downloads and sstate are persisted across runs via actions/cache.
+  #
+  # Prerequisite: run publish-build-image.yml at least once to push the image.
+  # ─────────────────────────────────────────────────────────────────────────
+  remote-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    permissions:
+      contents: read
+      packages: read   # to pull the GHCR image
+
+    steps:
+      - name: Free disk space
+        # ubuntu-latest runners start with ~14 GB free.
+        # Removing unused vendor toolchains recovers ~25 GB for Yocto's tmp/.
+        run: |
+          sudo rm -rf \
+            /opt/hostedtoolcache/CodeQL \
+            /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk \
+            /opt/hostedtoolcache/Ruby \
+            /usr/local/lib/android \
+            /usr/share/dotnet \
+            /usr/share/swift \
+            /usr/local/share/boost \
+            /usr/lib/jvm
+          df -h /
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Capture submodule revision hash
+        # Compute before cache restore so the key reflects the exact upstream
+        # layer pins (not just whether .gitmodules changed).
+        id: sub-hash
+        run: |
+          echo "rev=$(git submodule status | awk '{print $1}' | sort | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Restore Yocto downloads cache
+        # DL_DIR: source tarballs fetched by BitBake — rarely change, huge time saver.
+        uses: actions/cache@v4
+        with:
+          path: .cache/yocto/downloads
+          key: yocto-dl-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('conf/**') }}
+          restore-keys: |
+            yocto-dl-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-
+            yocto-dl-${{ runner.os }}-
+
+      - name: Restore Yocto sstate cache
+        # SSTATE_DIR: incremental build artefacts — avoids recompiling unchanged packages.
+        # Key is scoped to recipe files only so docs/README changes don't bust it.
+        uses: actions/cache@v4
+        with:
+          path: .cache/yocto/sstate-cache
+          key: yocto-sstate-${{ runner.os }}-${{ env.IMAGE_TARGET }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('conf/**', 'layers/**/*.bb', 'layers/**/*.bbappend', 'layers/**/*.bbclass') }}
+          restore-keys: |
+            yocto-sstate-${{ runner.os }}-${{ env.IMAGE_TARGET }}-${{ steps.sub-hash.outputs.rev }}-
+            yocto-sstate-${{ runner.os }}-${{ env.IMAGE_TARGET }}-
+            yocto-sstate-${{ runner.os }}-
+
+      - name: Initialize submodules
+        run: git submodule update --init --recursive
+
+      - name: Run Yocto build inside GHCR container
+        # The workspace is bind-mounted into the container at /workspace.
+        # Cache paths (.cache/yocto/downloads and .cache/yocto/sstate-cache)
+        # resolve correctly because remote-build.sh derives them from $PWD.
+        # BOOTSTRAP_PACKAGES=false skips the apt bootstrap — tools already exist
+        # in the image.
+        env:
+          YOCTO_CENTRAL_CACHE_RSYNC: ${{ secrets.YOCTO_CENTRAL_CACHE_RSYNC }}
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            --workdir /workspace \
+            --env BOOTSTRAP_PACKAGES=false \
+            --env IMAGE_TARGET="$IMAGE_TARGET" \
+            --env CLEAN_BUILD="$CLEAN_BUILD" \
+            --env YOCTO_CENTRAL_CACHE_RSYNC="${YOCTO_CENTRAL_CACHE_RSYNC:-}" \
+            ghcr.io/${{ github.repository_owner }}/yocto-build-env:latest \
+            bash scripts/remote-build.sh "$IMAGE_TARGET" "$CLEAN_BUILD"
+
+      - name: Collect artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          cp -a out/. artifacts/
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: yocto-images-remote-${{ github.run_number }}
           path: artifacts
           if-no-files-found: error

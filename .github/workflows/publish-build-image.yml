@@ -1,0 +1,73 @@
+name: Publish Yocto Build Image
+
+# Builds and pushes the Yocto build-environment image to GHCR.
+# The remote-yocto-build workflow pulls this image so CI never runs apt-get;
+# all tools are baked in at image-build time.
+#
+# Triggers:
+#   - Any push to main that touches the Dockerfile or the package bootstrap script
+#   - Weekly schedule to pick up upstream base-image security patches
+#   - Manual dispatch
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - ".devcontainer/Dockerfile"
+      - "scripts/bootstrap-worker-packages.sh"
+      - "scripts/devcontainer-sanity-check.sh"
+  schedule:
+    # Weekly on Sunday 02:00 UTC — refreshes base OS packages.
+    - cron: "0 2 * * 0"
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/yocto-build-env
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write   # required to push to GHCR
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image metadata (tags and labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            # latest tracks the default branch
+            type=raw,value=latest,enable={{is_default_branch}}
+            # short SHA tag for precise pinning
+            type=sha,prefix=sha-,format=short
+            # date-stamped tag for scheduled weekly builds
+            type=schedule,pattern=weekly-{{date 'YYYYMMDD'}}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: .devcontainer/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Re-use GitHub Actions layer cache across builds.
+          # mode=max caches all intermediate layers, not just the final stage.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

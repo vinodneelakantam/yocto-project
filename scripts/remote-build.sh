@@ -88,19 +88,19 @@ fi
 
 LOCAL_CONF="$YOCTO_BUILD_DIR/conf/local.conf"
 if [[ -f "$LOCAL_CONF" ]]; then
-  if ! grep -q '^DL_DIR\s*=' "$LOCAL_CONF"; then
-    printf 'DL_DIR = "%s"\n' "$DL_DIR" >> "$LOCAL_CONF"
-  fi
-  if ! grep -q '^SSTATE_DIR\s*=' "$LOCAL_CONF"; then
-    printf 'SSTATE_DIR = "%s"\n' "$SSTATE_DIR" >> "$LOCAL_CONF"
-  fi
+  # Always overwrite DL_DIR and SSTATE_DIR so stale hardcoded paths committed
+  # to build/conf/local.conf (e.g. /workspaces/... Codespace paths) are replaced
+  # with the correct paths for the current build environment (container, VPS, etc.).
+  sed -i '/^DL_DIR[[:space:]]*=/d; /^SSTATE_DIR[[:space:]]*=/d' "$LOCAL_CONF"
+  printf 'DL_DIR = "%s"\n' "$DL_DIR" >> "$LOCAL_CONF"
+  printf 'SSTATE_DIR = "%s"\n' "$SSTATE_DIR" >> "$LOCAL_CONF"
   # Auto-tune parallelism to the actual worker core count.
   # nproc reflects what the OS reports (Codespace vCPUs, runner CPUs, etc.).
   _NCPUS="$(nproc)"
-  if ! grep -q '^BB_NUMBER_THREADS\s*=' "$LOCAL_CONF"; then
+  if ! grep -q '^BB_NUMBER_THREADS[[:space:]]*=' "$LOCAL_CONF"; then
     printf 'BB_NUMBER_THREADS = "%s"\n' "$_NCPUS" >> "$LOCAL_CONF"
   fi
-  if ! grep -q '^PARALLEL_MAKE\s*=' "$LOCAL_CONF"; then
+  if ! grep -q '^PARALLEL_MAKE[[:space:]]*=' "$LOCAL_CONF"; then
     printf 'PARALLEL_MAKE = "-j %s"\n' "$_NCPUS" >> "$LOCAL_CONF"
   fi
 fi

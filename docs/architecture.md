@@ -26,18 +26,33 @@ For a visual summary, see:
 
 ## Build Data Flow
 
-1. Push to `main` triggers GitHub Actions workflow.
-2. Workflow syncs/bootstrap repository on external compute.
-3. Worker executes `scripts/remote-build.sh`.
-4. Output is staged in `out/` on worker.
-5. Artifacts are copied to GitHub runner and uploaded.
+Two jobs run in parallel on every push to `main`:
+
+**Remote build (primary — GitHub-hosted runner):**
+1. Push to `main` triggers the `remote-build` job.
+2. Disk space is freed on the runner (~25 GB recovered).
+3. `actions/cache` restores Yocto `downloads` and `sstate-cache` from previous runs.
+4. Submodules are initialized.
+5. `scripts/remote-build.sh` runs inside `ghcr.io/<owner>/yocto-build-env` — all tools are
+   pre-installed in the image; no package installation at build time.
+6. Updated caches are written back via `actions/cache` post-actions.
+7. Build outputs are uploaded as GitHub Actions artifacts.
+
+**Codespace build (opt-in — self-hosted runner):**
+Activated only on manual dispatch (`run_codespace=true`). Uses the same build
+scripts but runs directly inside the prebuilt devcontainer environment.
 
 ## Build Responsibility Split
 
-- GitHub Actions responsibility:
-	- Trigger handling, orchestration, artifact publishing, and visibility.
-- Worker responsibility:
-	- Repo checkout/bootstrap, package/tool installation, cache usage, BitBake execution, output generation.
+- GitHub Actions (`remote-build` job):
+  - Disk cleanup, cache restore/save, submodule init, artifact upload.
+  - Yocto build execution runs inside the GHCR container — no apt-get in CI.
+- `publish-build-image` workflow:
+  - Builds and pushes `ghcr.io/<owner>/yocto-build-env` to GHCR.
+  - Triggered on Dockerfile/script changes, weekly schedule, and manual dispatch.
+  - Uses Docker buildx layer cache (type=gha) for fast incremental image rebuilds.
+- Codespace devcontainer (`local-build` job / interactive dev):
+  - Prebuilt image with all tools; local BitBake runs via `scripts/local-build.sh`.
 
 ## Cost And Scale Strategy
 
@@ -48,14 +63,25 @@ For a visual summary, see:
 
 ## Why This Model
 
-- Avoids GitHub-hosted runner disk/CPU constraints for Yocto
-- Preserves portfolio visibility via Actions logs and artifacts
-- Separates orchestration from compute for scalability
+- All build tools are frozen into the GHCR image — no flaky apt installs in CI.
+- Docker layer cache (buildx GHA) makes image rebuilds fast after small changes.
+- `actions/cache` for `downloads` and `sstate-cache` avoids re-fetching sources and
+  recompiling unchanged recipes across runs.
+- Disk cleanup on the GitHub-hosted runner frees enough space for a minimal image
+  build without requiring paid larger runners.
+- GitHub remains the single pane of glass: build status, logs, and artifacts.
+- Codespace local builds use the same prebuilt devcontainer image, so local and CI
+  tool environments stay in sync.
 
 ## Failure Domains
 
-- Worker provisioning/connectivity failures (VPS/cloud instance lifecycle)
-- Missing source submodules (`sources/poky`, `sources/meta-openembedded`) on worker
-- Missing Yocto setup script (`sources/poky/oe-init-build-env`) on worker
-- Build resource limits on worker (RAM/storage)
-- Artifact transfer issues (scp/rsync)
+- GHCR image not yet pushed: `publish-build-image.yml` must run at least once before
+  `remote-build` can pull the image.
+- Disk exhaustion on GitHub-hosted runner: disk cleanup step frees ~25 GB; large
+  image targets may still exceed the available ~35–40 GB.
+- Missing source submodules: `git submodule update --init --recursive` step must
+  succeed; check network access and submodule URLs in `.gitmodules`.
+- Stale sstate cache across incompatible toolchain upgrades: bump the cache key
+  prefix manually or run with `clean=true` to force a full rebuild.
+- Codespace runner not active: `local-build` job will stay queued until the
+  Codespace is started; it is opt-in to avoid blocking the workflow.

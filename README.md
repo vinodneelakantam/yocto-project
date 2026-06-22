@@ -47,12 +47,23 @@ This repository is a **Yocto build orchestrator and showcase**, not a full mirro
 
 ### End-to-end workflow
 
-1. A change is pushed to `main`(or the workflow is started manually).
-2. GitHub Actions checks out this repo with submodules recursively.
-3. CI prepares SSH credentials (`VPS_SSH_KEY`) and host trust.
-4. Repository contents are synced to a VPS build directory.
-5. `scripts/remote-build.sh` runs BitBake on the VPS.
-6. Built images/logs from `out/` are copied back and uploaded as artifacts.
+Two parallel jobs run on every push to `main` (or manual dispatch):
+
+**Remote build — primary CI path (GitHub-hosted runner + Docker):**
+1. A change is pushed to `main` or the workflow is dispatched.
+2. ~25 GB of unused vendor toolchains are removed to make room for Yocto.
+3. A submodule revision hash is computed so cache keys track upstream layer pins.
+4. `actions/cache` restores Yocto `downloads` and `sstate-cache` from prior runs.
+5. Submodules are initialized.
+6. BitBake runs inside `ghcr.io/<owner>/yocto-build-env` — all tools are
+   pre-installed in the image; no package installation at build time.
+7. Updated caches are saved back for the next run.
+8. Built images and the build summary are uploaded as GitHub Actions artifacts.
+
+**Codespace build — opt-in (self-hosted runner):**
+Available on manual dispatch when a Codespace runner is active
+(`run_codespace=true`). Uses the same build scripts and cache paths but
+runs directly inside the prebuilt devcontainer.
 
 ### What gets built where
 
@@ -75,16 +86,20 @@ This repository is a **Yocto build orchestrator and showcase**, not a full mirro
 
 ### Build Cache Reuse Across Environments
 
-Remote workflow `.github/workflows/remote-yocto-build.yml` now syncs Yocto cache
-content between VPS and GitHub Actions cache:
+Remote workflow `.github/workflows/remote-yocto-build.yml` manages three cache
+layers across runs:
 
-- Restore cache from GitHub to runner (`downloads` and `sstate-cache`)
-- Push cache from runner to VPS before build
-- Run build on VPS using `.cache/yocto/`
-- Pull updated cache from VPS after build
-- Save refreshed cache back to GitHub
+| Layer | Mechanism | What is cached |
+|---|---|---|
+| Docker image layers | `publish-build-image.yml` + `buildx type=gha` | All Yocto tool packages (apt installs) |
+| Yocto source tarballs | `actions/cache` → `.cache/yocto/downloads` | Upstream source archives fetched by BitBake |
+| Yocto sstate | `actions/cache` → `.cache/yocto/sstate-cache` | Incremental build objects; avoids recompiling unchanged recipes |
 
-This makes dependency/build cache reusable across new Codespaces, new runners,
+Cache keys include a hash of all pinned submodule commit SHAs so the key
+automatically changes when an upstream layer is bumped, while still allowing
+fallback to the closest previous run via `restore-keys`.
+
+This makes dependency and build cache reusable across new Codespaces, new runners,
 and future workflow runs in the same repository.
 
 For local builds (and any non-GitHub-runner environment), set:
@@ -145,22 +160,16 @@ git submodule update --init --recursive
 - `layers/meta-ota`
 
 5. Configure GitHub repository secrets:
-- `VPS_HOST`
-- `VPS_USER`
-- `VPS_SSH_KEY`
-- `VPS_PORT` (optional)
-- `VPS_BUILD_ROOT` (optional)
-- `YOCTO_CENTRAL_CACHE_RSYNC` (optional; example: `<user>@<host>:/srv/yocto-cache`)
+- `GITHUB_TOKEN` — automatically provided by GitHub Actions; no manual setup required.
+- `YOCTO_CENTRAL_CACHE_RSYNC` (optional) — rsync URI for a shared cache server
+  (example: `user@host:/srv/yocto-cache`). When set, `remote-build.sh` syncs
+  `downloads` and `sstate-cache` to/from that server in addition to `actions/cache`.
 
-Use helper script after `gh auth login`:
-
-```bash
-export GH_REPO="owner/repo"
-export VPS_HOST="your.vps.host"
-export VPS_USER="yocto-ci"
-export VPS_SSH_KEY="$(cat ~/.ssh/id_ed25519)"
-./scripts/github/set-secrets.sh
-```
+> **Note — GHCR image prerequisite:** The `remote-build` CI job pulls
+> `ghcr.io/<owner>/yocto-build-env:latest`. Run the
+> **Publish Yocto Build Image** workflow manually once (or push a change to
+> `.devcontainer/Dockerfile`) to build and push the image before the first
+> remote build runs.
 
 6. Trigger a remote build:
 - Push to `main`, or
