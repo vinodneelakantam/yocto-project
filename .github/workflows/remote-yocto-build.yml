@@ -59,10 +59,12 @@ jobs:
 
       - name: Restore Yocto sstate cache
         # SSTATE_DIR: incremental build artefacts — avoids recompiling unchanged packages.
+        # Key is scoped to recipe files only (.bb/.bbappend/.bbclass) so documentation
+        # or README changes inside layers do not trigger unnecessary cache invalidation.
         uses: actions/cache@v4
         with:
           path: .cache/yocto/sstate-cache
-          key: yocto-sstate-${{ runner.os }}-${{ env.IMAGE_TARGET }}-${{ hashFiles('.gitmodules', 'conf/**', 'layers/**') }}
+          key: yocto-sstate-${{ runner.os }}-${{ env.IMAGE_TARGET }}-${{ hashFiles('.gitmodules', 'conf/**', 'layers/**/*.bb', 'layers/**/*.bbappend', 'layers/**/*.bbclass') }}
           restore-keys: |
             yocto-sstate-${{ runner.os }}-${{ env.IMAGE_TARGET }}-
             yocto-sstate-${{ runner.os }}-
