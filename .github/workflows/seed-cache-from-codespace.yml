@@ -1,0 +1,135 @@
+name: Sync Yocto Cache — Codespace ↔ GitHub
+
+# Bidirectional cache sync between the Codespace local disk and GitHub
+# Actions cache.  Runs on the self-hosted Codespace runner which has access
+# to both the GitHub cache service (as a runner) and the Codespace filesystem.
+#
+# Direction A — Codespace → GitHub cache  (default, triggered after builds)
+#   Hard-links new sstate/download files from the Codespace workspace into
+#   the runner workspace, then saves them to GitHub Actions cache so
+#   GitHub-hosted CI runners can restore them on the next run.
+#
+# Direction B — GitHub cache → Codespace  (pull)
+#   Restores the latest GitHub Actions cache entries into the runner workspace,
+#   then merges any files not already present into the Codespace workspace.
+#   Run this to warm a fresh Codespace from CI-built cache.
+#
+# Both directions run when direction=both (default).
+#
+# Requires:
+#   • Self-hosted runner active in the Codespace (label: codespace-yocto).
+#   • gh CLI authenticated in the Codespace (for cache-sync-daemon.sh).
+
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: "BitBake image target (sstate cache key scope)"
+        required: false
+        default: "core-image-minimal"
+      direction:
+        description: "Sync direction"
+        required: false
+        default: "both"
+        type: choice
+        options:
+          - both
+          - push   # Codespace → GitHub cache only
+          - pull   # GitHub cache → Codespace only
+
+jobs:
+  sync-cache:
+    name: "Yocto cache sync (${{ inputs.direction || 'both' }})"
+    runs-on: [self-hosted, linux, codespace-yocto]
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Capture submodule revision hash
+        # Mirrors the identical step in remote-yocto-build.yml so keys are
+        # compatible with the remote-build job's restore-keys.
+        id: sub-hash
+        run: |
+          echo "rev=$(git submodule status | awk '{print $1}' | sort | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+
+      # ── Direction B: GitHub cache → Codespace ──────────────────────────
+      - name: "[pull] Restore downloads from GitHub Actions cache"
+        if: ${{ inputs.direction == 'pull' || inputs.direction == 'both' || inputs.direction == '' }}
+        id: restore-dl
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/yocto/downloads
+          key: yocto-dl-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('conf/**') }}
+          restore-keys: |
+            yocto-dl-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-
+            yocto-dl-${{ runner.os }}-
+
+      - name: "[pull] Restore sstate from GitHub Actions cache"
+        if: ${{ inputs.direction == 'pull' || inputs.direction == 'both' || inputs.direction == '' }}
+        id: restore-sstate
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/yocto/sstate-cache
+          key: yocto-sstate-${{ runner.os }}-${{ inputs.image || 'core-image-minimal' }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('conf/**', 'layers/**/*.bb', 'layers/**/*.bbappend', 'layers/**/*.bbclass') }}
+          restore-keys: |
+            yocto-sstate-${{ runner.os }}-${{ inputs.image || 'core-image-minimal' }}-${{ steps.sub-hash.outputs.rev }}-
+            yocto-sstate-${{ runner.os }}-${{ inputs.image || 'core-image-minimal' }}-
+            yocto-sstate-${{ runner.os }}-
+
+      - name: "[pull] Merge restored cache into Codespace workspace"
+        if: ${{ inputs.direction == 'pull' || inputs.direction == 'both' || inputs.direction == '' }}
+        run: |
+          CODESPACE_CACHE="/workspaces/yocto-project/.cache/yocto"
+          mkdir -p "$CODESPACE_CACHE/downloads" "$CODESPACE_CACHE/sstate-cache"
+
+          for subdir in downloads sstate-cache; do
+            src=".cache/yocto/$subdir"
+            dst="$CODESPACE_CACHE/$subdir"
+            if [[ ! -d "$src" ]]; then
+              echo "[pull] No restored data for $subdir — skipping."
+              continue
+            fi
+            # --ignore-existing: never overwrite files already built locally.
+            # Hard-link first (zero copy), fall back to rsync.
+            cp -alnf "$src/." "$dst/" 2>/dev/null \
+              || rsync -a --ignore-existing "$src/" "$dst/"
+            echo "[pull] Merged $(find "$src" -maxdepth 1 | wc -l) entries into $dst"
+          done
+
+      # ── Direction A: Codespace → GitHub cache ──────────────────────────
+      - name: "[push] Link Codespace build cache into runner workspace"
+        if: ${{ inputs.direction == 'push' || inputs.direction == 'both' || inputs.direction == '' }}
+        run: |
+          CODESPACE_CACHE="/workspaces/yocto-project/.cache/yocto"
+
+          for subdir in downloads sstate-cache; do
+            src="$CODESPACE_CACHE/$subdir"
+            dst=".cache/yocto/$subdir"
+            if [[ ! -d "$src" ]]; then
+              echo "[push] WARNING: $src does not exist — skipping $subdir."
+              continue
+            fi
+            echo "[push] Linking $src → $dst"
+            mkdir -p "$dst"
+            cp -alf "$src/." "$dst/" 2>/dev/null \
+              || rsync -a --no-whole-file "$src/" "$dst/"
+            echo "[push]   $(find "$dst" -maxdepth 1 | wc -l) entries in $dst"
+          done
+
+      - name: "[push] Save downloads to GitHub Actions cache"
+        if: ${{ inputs.direction == 'push' || inputs.direction == 'both' || inputs.direction == '' }}
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/yocto/downloads
+          key: yocto-dl-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('conf/**') }}
+
+      - name: "[push] Save sstate to GitHub Actions cache"
+        if: ${{ inputs.direction == 'push' || inputs.direction == 'both' || inputs.direction == '' }}
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/yocto/sstate-cache
+          key: yocto-sstate-${{ runner.os }}-${{ inputs.image || 'core-image-minimal' }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('conf/**', 'layers/**/*.bb', 'layers/**/*.bbappend', 'layers/**/*.bbclass') }}

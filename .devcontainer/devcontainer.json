@@ -11,5 +11,5 @@
   },
   "remoteUser": "vscode",
   "postCreateCommand": "bash /workspaces/yocto-project/scripts/devcontainer-sanity-check.sh",
-  "postStartCommand": "bash /workspaces/yocto-project/scripts/devcontainer-sanity-check.sh"
+  "postStartCommand": "bash /workspaces/yocto-project/scripts/devcontainer-sanity-check.sh && chmod +x /workspaces/yocto-project/scripts/cache-sync-daemon.sh && (command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1 && nohup /workspaces/yocto-project/scripts/cache-sync-daemon.sh >/tmp/cache-sync-daemon.log 2>&1 & echo $! > /tmp/cache-sync-daemon.pid && echo '[devcontainer] Cache sync daemon started (PID '$(cat /tmp/cache-sync-daemon.pid)')') || echo '[devcontainer] Cache sync daemon skipped (gh not authenticated — run gh auth login to enable)'"
 }
