@@ -135,15 +135,43 @@ jobs:
             yocto-dl-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-
             yocto-dl-${{ runner.os }}-
 
-      - name: Restore Yocto sstate cache
-        uses: actions/cache@v4
+      # ── sstate restore: per-layer keys ────────────────────────────────────
+      - name: Restore upstream sstate cache (poky / meta-oe)
+        uses: actions/cache/restore@v4
         with:
           path: .cache/yocto/sstate-cache
-          key: yocto-sstate-${{ runner.os }}-${{ env.IMAGE_TARGET }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('conf/**', 'layers/**/*.bb', 'layers/**/*.bbappend', 'layers/**/*.bbclass') }}
+          key: yocto-sstate-upstream-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('conf/**') }}
           restore-keys: |
-            yocto-sstate-${{ runner.os }}-${{ env.IMAGE_TARGET }}-${{ steps.sub-hash.outputs.rev }}-
-            yocto-sstate-${{ runner.os }}-${{ env.IMAGE_TARGET }}-
-            yocto-sstate-${{ runner.os }}-
+            yocto-sstate-upstream-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-
+            yocto-sstate-upstream-${{ runner.os }}-
+
+      - name: Restore meta-portfolio sstate cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/yocto/sstate-cache
+          key: yocto-sstate-meta-portfolio-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('layers/meta-portfolio/**/*.bb', 'layers/meta-portfolio/**/*.bbappend', 'layers/meta-portfolio/**/*.bbclass') }}
+          restore-keys: |
+            yocto-sstate-meta-portfolio-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-
+            yocto-sstate-meta-portfolio-${{ runner.os }}-
+
+      - name: Restore meta-security sstate cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/yocto/sstate-cache
+          key: yocto-sstate-meta-security-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('layers/meta-security/**/*.bb', 'layers/meta-security/**/*.bbappend', 'layers/meta-security/**/*.bbclass') }}
+          restore-keys: |
+            yocto-sstate-meta-security-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-
+            yocto-sstate-meta-security-${{ runner.os }}-
+
+      - name: Restore meta-ota sstate cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/yocto/sstate-cache
+          key: yocto-sstate-meta-ota-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('layers/meta-ota/**/*.bb', 'layers/meta-ota/**/*.bbappend', 'layers/meta-ota/**/*.bbclass') }}
+          restore-keys: |
+            yocto-sstate-meta-ota-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-
+            yocto-sstate-meta-ota-${{ runner.os }}-
+      # ──────────────────────────────────────────────────────────────────────
 
       - name: Initialize submodules
         run: git submodule update --init --recursive
@@ -154,6 +182,36 @@ jobs:
           chmod +x scripts/local-build.sh scripts/remote-build.sh \
             scripts/bootstrap-worker-packages.sh scripts/devcontainer-sanity-check.sh
           ./scripts/local-build.sh "$IMAGE_TARGET" "$CLEAN_BUILD"
+
+      # ── sstate save: one entry per layer ──────────────────────────────────
+      - name: Save upstream sstate cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/yocto/sstate-cache
+          key: yocto-sstate-upstream-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('conf/**') }}
+
+      - name: Save meta-portfolio sstate cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/yocto/sstate-cache
+          key: yocto-sstate-meta-portfolio-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('layers/meta-portfolio/**/*.bb', 'layers/meta-portfolio/**/*.bbappend', 'layers/meta-portfolio/**/*.bbclass') }}
+
+      - name: Save meta-security sstate cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/yocto/sstate-cache
+          key: yocto-sstate-meta-security-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('layers/meta-security/**/*.bb', 'layers/meta-security/**/*.bbappend', 'layers/meta-security/**/*.bbclass') }}
+
+      - name: Save meta-ota sstate cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/yocto/sstate-cache
+          key: yocto-sstate-meta-ota-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('layers/meta-ota/**/*.bb', 'layers/meta-ota/**/*.bbappend', 'layers/meta-ota/**/*.bbclass') }}
+      # ──────────────────────────────────────────────────────────────────────
 
       - name: Collect artifacts
         run: |
@@ -229,17 +287,48 @@ jobs:
             yocto-dl-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-
             yocto-dl-${{ runner.os }}-
 
-      - name: Restore Yocto sstate cache
-        # SSTATE_DIR: incremental build artefacts — avoids recompiling unchanged packages.
-        # Key is scoped to recipe files only so docs/README changes don't bust it.
-        uses: actions/cache@v4
+      # ── sstate restore: per-layer keys ────────────────────────────────────
+      # All four entries restore into the same SSTATE_DIR.  Because sstate
+      # files are content-addressed (unique filenames), the merges are
+      # conflict-free.  Splitting the key per layer means a change to one
+      # custom layer only busts that layer's key; the other caches still hit.
+      - name: Restore upstream sstate cache (poky / meta-oe)
+        # Keyed on submodule pins + conf — rarely changes.
+        uses: actions/cache/restore@v4
         with:
           path: .cache/yocto/sstate-cache
-          key: yocto-sstate-${{ runner.os }}-${{ env.IMAGE_TARGET }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('conf/**', 'layers/**/*.bb', 'layers/**/*.bbappend', 'layers/**/*.bbclass') }}
+          key: yocto-sstate-upstream-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('conf/**') }}
           restore-keys: |
-            yocto-sstate-${{ runner.os }}-${{ env.IMAGE_TARGET }}-${{ steps.sub-hash.outputs.rev }}-
-            yocto-sstate-${{ runner.os }}-${{ env.IMAGE_TARGET }}-
-            yocto-sstate-${{ runner.os }}-
+            yocto-sstate-upstream-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-
+            yocto-sstate-upstream-${{ runner.os }}-
+
+      - name: Restore meta-portfolio sstate cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/yocto/sstate-cache
+          key: yocto-sstate-meta-portfolio-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('layers/meta-portfolio/**/*.bb', 'layers/meta-portfolio/**/*.bbappend', 'layers/meta-portfolio/**/*.bbclass') }}
+          restore-keys: |
+            yocto-sstate-meta-portfolio-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-
+            yocto-sstate-meta-portfolio-${{ runner.os }}-
+
+      - name: Restore meta-security sstate cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/yocto/sstate-cache
+          key: yocto-sstate-meta-security-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('layers/meta-security/**/*.bb', 'layers/meta-security/**/*.bbappend', 'layers/meta-security/**/*.bbclass') }}
+          restore-keys: |
+            yocto-sstate-meta-security-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-
+            yocto-sstate-meta-security-${{ runner.os }}-
+
+      - name: Restore meta-ota sstate cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/yocto/sstate-cache
+          key: yocto-sstate-meta-ota-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('layers/meta-ota/**/*.bb', 'layers/meta-ota/**/*.bbappend', 'layers/meta-ota/**/*.bbclass') }}
+          restore-keys: |
+            yocto-sstate-meta-ota-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-
+            yocto-sstate-meta-ota-${{ runner.os }}-
+      # ──────────────────────────────────────────────────────────────────────
 
       - name: Initialize submodules
         run: git submodule update --init --recursive
@@ -265,6 +354,40 @@ jobs:
             --env YOCTO_CENTRAL_CACHE_RSYNC="${YOCTO_CENTRAL_CACHE_RSYNC:-}" \
             ghcr.io/${{ github.repository_owner }}/yocto-build-env:latest \
             bash scripts/remote-build.sh "$IMAGE_TARGET" "$CLEAN_BUILD"
+
+      # ── sstate save: one entry per layer ──────────────────────────────────
+      # Explicit saves run even on build failure (partial sstate is valid —
+      # BitBake validates each entry independently on the next run).
+      # actions/cache/save is a no-op when the key already exists in the
+      # cache, so unchanged layers do not produce a new upload.
+      - name: Save upstream sstate cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/yocto/sstate-cache
+          key: yocto-sstate-upstream-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('conf/**') }}
+
+      - name: Save meta-portfolio sstate cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/yocto/sstate-cache
+          key: yocto-sstate-meta-portfolio-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('layers/meta-portfolio/**/*.bb', 'layers/meta-portfolio/**/*.bbappend', 'layers/meta-portfolio/**/*.bbclass') }}
+
+      - name: Save meta-security sstate cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/yocto/sstate-cache
+          key: yocto-sstate-meta-security-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('layers/meta-security/**/*.bb', 'layers/meta-security/**/*.bbappend', 'layers/meta-security/**/*.bbclass') }}
+
+      - name: Save meta-ota sstate cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/yocto/sstate-cache
+          key: yocto-sstate-meta-ota-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('layers/meta-ota/**/*.bb', 'layers/meta-ota/**/*.bbappend', 'layers/meta-ota/**/*.bbclass') }}
+      # ──────────────────────────────────────────────────────────────────────
 
       - name: Collect artifacts
         run: |
