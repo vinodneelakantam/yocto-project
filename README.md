@@ -47,7 +47,7 @@ This repository is a **Yocto build orchestrator and showcase**, not a full mirro
 
 ### End-to-end workflow
 
-1. A change is pushed to `main` (or the workflow is started manually).
+1. A change is pushed to `main`(or the workflow is started manually).
 2. GitHub Actions checks out this repo with submodules recursively.
 3. CI prepares SSH credentials (`VPS_SSH_KEY`) and host trust.
 4. Repository contents are synced to a VPS build directory.
