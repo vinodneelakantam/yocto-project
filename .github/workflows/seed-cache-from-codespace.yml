@@ -68,17 +68,45 @@ jobs:
             yocto-dl-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-
             yocto-dl-${{ runner.os }}-
 
-      - name: "[pull] Restore sstate from GitHub Actions cache"
+      - name: "[pull] Restore upstream sstate from GitHub Actions cache"
         if: ${{ inputs.direction == 'pull' || inputs.direction == 'both' || inputs.direction == '' }}
-        id: restore-sstate
         uses: actions/cache/restore@v4
         with:
           path: .cache/yocto/sstate-cache
-          key: yocto-sstate-${{ runner.os }}-${{ inputs.image || 'core-image-minimal' }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('conf/**', 'layers/**/*.bb', 'layers/**/*.bbappend', 'layers/**/*.bbclass') }}
+          key: yocto-sstate-upstream-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('conf/**') }}
           restore-keys: |
-            yocto-sstate-${{ runner.os }}-${{ inputs.image || 'core-image-minimal' }}-${{ steps.sub-hash.outputs.rev }}-
-            yocto-sstate-${{ runner.os }}-${{ inputs.image || 'core-image-minimal' }}-
-            yocto-sstate-${{ runner.os }}-
+            yocto-sstate-upstream-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-
+            yocto-sstate-upstream-${{ runner.os }}-
+
+      - name: "[pull] Restore meta-portfolio sstate from GitHub Actions cache"
+        if: ${{ inputs.direction == 'pull' || inputs.direction == 'both' || inputs.direction == '' }}
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/yocto/sstate-cache
+          key: yocto-sstate-meta-portfolio-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('layers/meta-portfolio/**/*.bb', 'layers/meta-portfolio/**/*.bbappend', 'layers/meta-portfolio/**/*.bbclass') }}
+          restore-keys: |
+            yocto-sstate-meta-portfolio-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-
+            yocto-sstate-meta-portfolio-${{ runner.os }}-
+
+      - name: "[pull] Restore meta-security sstate from GitHub Actions cache"
+        if: ${{ inputs.direction == 'pull' || inputs.direction == 'both' || inputs.direction == '' }}
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/yocto/sstate-cache
+          key: yocto-sstate-meta-security-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('layers/meta-security/**/*.bb', 'layers/meta-security/**/*.bbappend', 'layers/meta-security/**/*.bbclass') }}
+          restore-keys: |
+            yocto-sstate-meta-security-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-
+            yocto-sstate-meta-security-${{ runner.os }}-
+
+      - name: "[pull] Restore meta-ota sstate from GitHub Actions cache"
+        if: ${{ inputs.direction == 'pull' || inputs.direction == 'both' || inputs.direction == '' }}
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/yocto/sstate-cache
+          key: yocto-sstate-meta-ota-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('layers/meta-ota/**/*.bb', 'layers/meta-ota/**/*.bbappend', 'layers/meta-ota/**/*.bbclass') }}
+          restore-keys: |
+            yocto-sstate-meta-ota-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-
+            yocto-sstate-meta-ota-${{ runner.os }}-
 
       - name: "[pull] Merge restored cache into Codespace workspace"
         if: ${{ inputs.direction == 'pull' || inputs.direction == 'both' || inputs.direction == '' }}
@@ -127,9 +155,30 @@ jobs:
           path: .cache/yocto/downloads
           key: yocto-dl-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('conf/**') }}
 
-      - name: "[push] Save sstate to GitHub Actions cache"
+      - name: "[push] Save upstream sstate to GitHub Actions cache"
         if: ${{ inputs.direction == 'push' || inputs.direction == 'both' || inputs.direction == '' }}
         uses: actions/cache/save@v4
         with:
           path: .cache/yocto/sstate-cache
-          key: yocto-sstate-${{ runner.os }}-${{ inputs.image || 'core-image-minimal' }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('conf/**', 'layers/**/*.bb', 'layers/**/*.bbappend', 'layers/**/*.bbclass') }}
+          key: yocto-sstate-upstream-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('conf/**') }}
+
+      - name: "[push] Save meta-portfolio sstate to GitHub Actions cache"
+        if: ${{ inputs.direction == 'push' || inputs.direction == 'both' || inputs.direction == '' }}
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/yocto/sstate-cache
+          key: yocto-sstate-meta-portfolio-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('layers/meta-portfolio/**/*.bb', 'layers/meta-portfolio/**/*.bbappend', 'layers/meta-portfolio/**/*.bbclass') }}
+
+      - name: "[push] Save meta-security sstate to GitHub Actions cache"
+        if: ${{ inputs.direction == 'push' || inputs.direction == 'both' || inputs.direction == '' }}
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/yocto/sstate-cache
+          key: yocto-sstate-meta-security-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('layers/meta-security/**/*.bb', 'layers/meta-security/**/*.bbappend', 'layers/meta-security/**/*.bbclass') }}
+
+      - name: "[push] Save meta-ota sstate to GitHub Actions cache"
+        if: ${{ inputs.direction == 'push' || inputs.direction == 'both' || inputs.direction == '' }}
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/yocto/sstate-cache
+          key: yocto-sstate-meta-ota-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('layers/meta-ota/**/*.bb', 'layers/meta-ota/**/*.bbappend', 'layers/meta-ota/**/*.bbclass') }}
