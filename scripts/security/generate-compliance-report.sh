@@ -7,6 +7,10 @@ REPORT_DIR="$OUT_DIR/compliance"
 SBOM_FILE="$REPORT_DIR/sbom.spdx.json"
 LICENSE_FILE="$REPORT_DIR/license-manifest.txt"
 CVE_SUMMARY_FILE="$REPORT_DIR/cve-summary.json"
+YOCTO_DEPLOY_IMAGES_DIR="${YOCTO_DEPLOY_IMAGES_DIR:-$ROOT_DIR/build/tmp/deploy/images}"
+if [[ ! -d "$YOCTO_DEPLOY_IMAGES_DIR" ]]; then
+  YOCTO_DEPLOY_IMAGES_DIR="$OUT_DIR/images"
+fi
 
 mkdir -p "$REPORT_DIR"
 
@@ -33,20 +37,22 @@ mkdir -p "$REPORT_DIR"
 EOF
 } >"$SBOM_FILE"
 
-LICENSE_MANIFEST_PATH="$(find "$ROOT_DIR/build/tmp/deploy/images" -type f -name "license.manifest" | head -n1 || true)"
-if [[ -n "$LICENSE_MANIFEST_PATH" ]]; then
-  cp "$LICENSE_MANIFEST_PATH" "$LICENSE_FILE"
+LICENSE_MANIFEST_SOURCE_PATH="$(find "$YOCTO_DEPLOY_IMAGES_DIR" -type f -name "license.manifest" 2>/dev/null | head -n1 || true)"
+if [[ -n "$LICENSE_MANIFEST_SOURCE_PATH" ]]; then
+  cp "$LICENSE_MANIFEST_SOURCE_PATH" "$LICENSE_FILE"
 else
   echo "license.manifest not found in build outputs." >"$LICENSE_FILE"
 fi
 
-CVE_CHECK_PATH="$(find "$ROOT_DIR/build/tmp/deploy/images" -type f \( -name "*cve*.json" -o -name "cve_check" -o -name "*cve*.txt" \) | head -n1 || true)"
-if [[ -n "$CVE_CHECK_PATH" ]]; then
-  escaped_path="${CVE_CHECK_PATH//\"/\\\"}"
+CVE_CHECK_SOURCE_PATH="$(find "$YOCTO_DEPLOY_IMAGES_DIR" -type f -name "*cve*.json" 2>/dev/null | head -n1 || true)"
+if [[ -z "$CVE_CHECK_SOURCE_PATH" ]]; then
+  CVE_CHECK_SOURCE_PATH="$(find "$YOCTO_DEPLOY_IMAGES_DIR" -type f \( -name "cve_check" -o -name "*cve*.txt" \) 2>/dev/null | head -n1 || true)"
+fi
+if [[ -n "$CVE_CHECK_SOURCE_PATH" ]]; then
   cat >"$CVE_SUMMARY_FILE" <<EOF
 {
   "status": "present",
-  "source_path": "$escaped_path",
+  "source_path": "$CVE_CHECK_SOURCE_PATH",
   "high_or_critical_detected": false
 }
 EOF

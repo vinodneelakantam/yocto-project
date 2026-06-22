@@ -26,12 +26,42 @@ fi
 
 mkdir -p "$ARCHIVE_DIR"
 
+NETRC_FILE="$(mktemp)"
+trap 'rm -f "$NETRC_FILE"' EXIT
+chmod 600 "$NETRC_FILE"
+cat >"$NETRC_FILE" <<EOF
+machine api.github.com
+login x-access-token
+password $GITHUB_TOKEN
+EOF
+
 API_URL="https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/artifacts"
+extract_artifact_id() {
+  python - "$ARTIFACT_NAME" <<'PY'
+import json
+import sys
+
+artifact_name = sys.argv[1]
+payload = json.load(sys.stdin)
+for artifact in payload.get("artifacts", []):
+    if artifact.get("name") == artifact_name:
+        print(str(artifact["id"]))
+        break
+else:
+    available = [a.get("name", "<unnamed>") for a in payload.get("artifacts", [])]
+    if available:
+        print("Available artifacts: " + ", ".join(available), file=sys.stderr)
+    else:
+        print("No artifacts were returned for the provided run.", file=sys.stderr)
+    print("")
+PY
+}
+
 ARTIFACT_ID="$(curl -fsSL \
-  -u "x-access-token:${GITHUB_TOKEN}" \
+  --netrc-file "$NETRC_FILE" \
   -H "Accept: application/vnd.github+json" \
   "$API_URL" \
-  | python -c 'import json,sys; d=json.load(sys.stdin); n=sys.argv[1]; print(next((str(a["id"]) for a in d.get("artifacts",[]) if a.get("name")==n), ""))' "$ARTIFACT_NAME")"
+  | extract_artifact_id)"
 
 if [[ -z "$ARTIFACT_ID" ]]; then
   echo "Artifact '$ARTIFACT_NAME' was not found in run '$RUN_ID'."
@@ -40,7 +70,7 @@ fi
 
 ZIP_PATH="$OUT_DIR/${ARTIFACT_NAME}.zip"
 curl -fsSL \
-  -u "x-access-token:${GITHUB_TOKEN}" \
+  --netrc-file "$NETRC_FILE" \
   -H "Accept: application/vnd.github+json" \
   "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip" \
   -o "$ZIP_PATH"

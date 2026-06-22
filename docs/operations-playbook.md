@@ -30,5 +30,5 @@
 ## OTA Rollback Discipline
 
 - Use A/B update model.
-- Validate health checks before slot switch completion.
+- Validate health check results before slot switch completion.
 - Test rollback path for each release candidate before production promotion.

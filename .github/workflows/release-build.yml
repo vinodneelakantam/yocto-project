@@ -65,7 +65,7 @@ jobs:
 
       - name: CVE gate before release artifact publication
         env:
-          ALLOW_MISSING_CVE_REPORT: ${{ inputs.allow_missing_cve_report && 'true' || 'false' }}
+          ALLOW_MISSING_CVE_REPORT: ${{ inputs.allow_missing_cve_report }}
         run: ./scripts/security/cve-gate.sh out
 
       - name: Upload release artifact
