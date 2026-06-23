@@ -1,0 +1,92 @@
+name: Bazel SDV App
+
+# Fast inner-loop CI for the Bazel-built SDV applications under apps/.
+# This is deliberately separate from the heavy Yocto build
+# (remote-yocto-build.yml): it builds and tests the C/C++/Python application
+# natively on a GitHub-hosted runner in minutes, with no Yocto involvement.
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "apps/**"
+      - "MODULE.bazel"
+      - ".bazelrc"
+      - ".bazelversion"
+      - ".bazelignore"
+      - ".github/workflows/bazel-sdv-app.yml"
+  pull_request:
+    paths:
+      - "apps/**"
+      - "MODULE.bazel"
+      - ".bazelrc"
+      - ".bazelversion"
+      - ".bazelignore"
+      - ".github/workflows/bazel-sdv-app.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: bazel-sdv-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Init SDV app submodule (if configured)
+        run: |
+          if [[ -f .gitmodules ]] && git config -f .gitmodules --get submodule.apps/sdv-vehicle-service.path >/dev/null 2>&1; then
+            git submodule update --init --recursive apps/sdv-vehicle-service
+          fi
+
+      # Cache Bazel's repository and disk caches between runs.  This is the
+      # Bazel analogue of the Yocto downloads/sstate caches and keeps rebuilds
+      # of a growing C++ tree fast.
+      - name: Cache Bazel
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/bazel-disk
+            ~/.cache/bazel-repo
+            ~/.cache/bazelisk
+          key: bazel-${{ runner.os }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'apps/**/BUILD.bazel') }}
+          restore-keys: |
+            bazel-${{ runner.os }}-
+
+      # Detect whether the apps/ directory contains any Bazel BUILD files.
+      # When apps/sdv-vehicle-service is a submodule that points to a repo
+      # without Bazel targets (e.g. COVESA/vehicle_signal_specification), the
+      # build and test steps must be skipped to avoid a hard CI failure.  The
+      # outcome is exposed as the step output `has_targets` so the subsequent
+      # steps can gate on it.
+      - name: Check for Bazel targets in apps/
+        id: check_targets
+        run: |
+          if find apps -type f \( -name "BUILD.bazel" -o -name "BUILD" \) | grep -q .; then
+            echo "has_targets=true" >> "$GITHUB_OUTPUT"
+            echo "Bazel BUILD files found – build and test will run."
+          else
+            echo "has_targets=false" >> "$GITHUB_OUTPUT"
+            echo "No Bazel BUILD files found under apps/. Build and test steps will be skipped."
+            echo "This is expected while apps/sdv-vehicle-service points to a repository"
+            echo "that does not yet contain Bazel targets."
+          fi
+
+      # Bazelisk ships preinstalled on ubuntu-latest runners and honours
+      # .bazelversion to fetch the pinned Bazel release.
+      - name: Build SDV application
+        if: steps.check_targets.outputs.has_targets == 'true'
+        run: bazelisk build --config=ci //apps/...
+
+      - name: Test SDV application
+        if: steps.check_targets.outputs.has_targets == 'true'
+        run: bazelisk test --config=ci //apps/...

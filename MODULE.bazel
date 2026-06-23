@@ -1,0 +1,29 @@
+# Bzlmod module definition for the SDV applications built with Bazel.
+#
+# This file makes the C++ dependency graph explicit so it scales cleanly from
+# the small in-repo vehicle-signal service toward an Apollo-sized C++ tree.
+#
+# Dependency versions are pinned against the Bazel Central Registry (BCR).
+# When building inside Yocto with no network (BB_NO_NETWORK=1), these modules
+# must be vendored / mirrored ahead of time and provided via `--distdir`
+# (see docs/sdv-bazel-app.md, "Offline dependency strategy").
+module(
+    name = "sdv_apps",
+    version = "0.1.0",
+    compatibility_level = 1,
+)
+
+# Core C/C++ build rules.
+bazel_dep(name = "rules_cc", version = "0.0.17")
+
+# Python rules for the C/C++/Python SDV tooling.
+bazel_dep(name = "rules_python", version = "0.40.0")
+
+# Toolchain registration for Python.  Pinned to the interpreter version that
+# the Yocto SDK / target rootfs ships (python3) so the inner loop matches the
+# outer loop.
+python = use_extension("@rules_python//python/extensions:python.bzl", "python")
+python.toolchain(
+    is_default = True,
+    python_version = "3.12",
+)

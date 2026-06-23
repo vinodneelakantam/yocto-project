@@ -87,3 +87,18 @@ After success, outputs are staged in:
   - Re-run `./scripts/bootstrap-worker-packages.sh`.
 - Very slow build:
   - Reuse cache directories under `.cache/yocto/` and avoid `clean=true` unless needed.
+
+## 6) Bazel SDV Application (inner loop)
+
+The repository also hosts a Bazel-built SDV application under `apps/`. Bazel
+(via Bazelisk) is installed by `./scripts/bootstrap-worker-packages.sh`, pinned
+by `.bazelversion`. Build and test it natively for fast iteration:
+
+```bash
+bazel build //apps/sdv-vehicle-service/...
+bazel test  //apps/sdv-vehicle-service/...
+bazel run   //apps/sdv-vehicle-service:sdv-vehicle-service -- --once
+```
+
+To cross-compile and package it into a Yocto image, see
+`docs/sdv-bazel-app.md` and the `layers/meta-sdv` recipe.

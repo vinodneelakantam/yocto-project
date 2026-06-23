@@ -16,4 +16,5 @@ BBLAYERS ?= " \
   ${YOCTO_PROJECT_ROOT}/layers/meta-portfolio \
   ${YOCTO_PROJECT_ROOT}/layers/meta-security \
   ${YOCTO_PROJECT_ROOT}/layers/meta-ota \
+  ${YOCTO_PROJECT_ROOT}/layers/meta-sdv \
 "

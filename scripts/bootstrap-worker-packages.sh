@@ -65,6 +65,48 @@ if [[ ${#missing_pkgs[@]} -gt 0 ]]; then
   exit 1
 fi
 
+# Install Bazelisk (pinned Bazel launcher) so every worker/devcontainer has a
+# deterministic Bazel for the SDV applications under apps/ (see
+# docs/sdv-bazel-app.md).  Bazelisk reads .bazelversion to pick the exact Bazel
+# release, keeping the inner (dev) and outer (Yocto) build loops in sync.
+BAZELISK_VERSION="${BAZELISK_VERSION:-v1.22.1}"
+BAZELISK_INSTALL_PATH="${BAZELISK_INSTALL_PATH:-/usr/local/bin/bazelisk}"
+if command -v bazelisk >/dev/null 2>&1 || command -v bazel >/dev/null 2>&1; then
+  echo "Bazel/Bazelisk already present; skipping Bazelisk install."
+else
+  case "$(uname -m)" in
+    x86_64|amd64) bazelisk_arch="amd64" ;;
+    aarch64|arm64) bazelisk_arch="arm64" ;;
+    *) bazelisk_arch="" ;;
+  esac
+
+  if [[ -z "$bazelisk_arch" ]]; then
+    echo "WARNING: Unsupported architecture '$(uname -m)' for Bazelisk; skipping."
+  else
+    bazelisk_url="https://github.com/bazelbuild/bazelisk/releases/download/${BAZELISK_VERSION}/bazelisk-linux-${bazelisk_arch}"
+    bazelisk_sha_url="${bazelisk_url}.sha256"
+    echo "Installing Bazelisk ${BAZELISK_VERSION} (${bazelisk_arch}) from ${bazelisk_url}..."
+    tmp_bazelisk="$(mktemp)"
+    tmp_bazelisk_sha="$(mktemp)"
+    if wget -qO "$tmp_bazelisk" "$bazelisk_url" && wget -qO "$tmp_bazelisk_sha" "$bazelisk_sha_url"; then
+      expected_sha="$(awk '{print $1}' "$tmp_bazelisk_sha")"
+      actual_sha="$(sha256sum "$tmp_bazelisk" | awk '{print $1}')"
+      if [[ "$expected_sha" != "$actual_sha" ]]; then
+        echo "WARNING: Bazelisk checksum mismatch; skipping install."
+      else
+        $SUDO install -m 0755 "$tmp_bazelisk" "$BAZELISK_INSTALL_PATH"
+        # Provide a `bazel` alias so tools that call `bazel` resolve to Bazelisk.
+        if ! command -v bazel >/dev/null 2>&1; then
+          $SUDO ln -sf "$BAZELISK_INSTALL_PATH" "$(dirname "$BAZELISK_INSTALL_PATH")/bazel"
+        fi
+      fi
+    else
+      echo "WARNING: Failed to download Bazelisk or its checksum; SDV Bazel builds will be unavailable until it is installed."
+    fi
+    rm -f "$tmp_bazelisk" "$tmp_bazelisk_sha"
+  fi
+fi
+
 if ! command -v pzstd >/dev/null 2>&1; then
   echo "ERROR: pzstd is still unavailable after package bootstrap."
   echo "On Debian/Ubuntu, install package: zstd"

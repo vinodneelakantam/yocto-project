@@ -1,0 +1,61 @@
+# ──────────────────────────────────────────────────────────────────────────
+# Bazel configuration for the SDV applications in this repository.
+#
+# This file is shared by the two build loops described in docs/sdv-bazel-app.md:
+#   * Inner loop  — developer / devcontainer native builds and tests.
+#   * Outer loop  — Yocto recipe (layers/meta-sdv) cross-compiling for the image.
+# ──────────────────────────────────────────────────────────────────────────
+
+# Use bzlmod (MODULE.bazel) as the dependency system.
+common --enable_bzlmod
+
+# Show useful errors and keep output stable for CI logs.
+common --color=yes
+build --show_timestamps
+test --test_output=errors
+test --test_summary=terse
+
+# ── Local caches ──────────────────────────────────────────────────────────
+# Disk cache speeds up incremental rebuilds for a large C++ codebase without
+# needing any remote infrastructure.  Path is overridable per environment.
+build --disk_cache=~/.cache/bazel-disk
+build --repository_cache=~/.cache/bazel-repo
+
+# ── CI profile ────────────────────────────────────────────────────────────
+# Invoked as `bazel ... --config=ci`.  Tuned for ephemeral runners.
+build:ci --disk_cache=
+build:ci --repository_cache=
+build:ci --noshow_progress
+build:ci --keep_going
+test:ci --keep_going
+
+# ── Remote cache (4th cache tier — opt-in) ────────────────────────────────
+# This mirrors the repository's existing three-tier Yocto cache philosophy
+# (docker layers, downloads, sstate) by adding a Bazel remote cache tier.
+# Disabled by default; enable with `--config=remote-cache` once a cache
+# endpoint (bazel-remote, BuildBuddy, etc.) is provisioned.
+#
+# build:remote-cache --remote_cache=grpc://your-cache-host:9092
+# build:remote-cache --remote_upload_local_results=true
+# Build-without-the-bytes: only fetch outputs that are actually needed,
+# which dramatically reduces network for large C++ trees.
+build:remote-cache --remote_download_minimal
+
+# ── Yocto cross-compilation profile ───────────────────────────────────────
+# Invoked as `bazel ... --config=yocto-cross`.  The Yocto recipe sources the
+# SDK environment (environment-setup-*) first, which exports CC/CXX/CFLAGS/
+# LDFLAGS/SYSROOT for the target MACHINE.  Bazel's built-in C++ toolchain
+# auto-detection honours CC/CXX, so the cross compiler is picked up from the
+# recipe environment.  See layers/meta-sdv recipe and docs/sdv-bazel-app.md.
+build:yocto-cross --action_env=CC
+build:yocto-cross --action_env=CXX
+build:yocto-cross --action_env=CFLAGS
+build:yocto-cross --action_env=CXXFLAGS
+build:yocto-cross --action_env=LDFLAGS
+build:yocto-cross --action_env=SYSROOT
+# Hermetic-ish: do not leak host paths beyond the SDK environment above.
+build:yocto-cross --incompatible_strict_action_env
+
+# Allow a per-machine / per-user override without editing this file.
+try-import %workspace%/.bazelrc.local
+try-import %workspace%/user.bazelrc

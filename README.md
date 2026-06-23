@@ -25,6 +25,7 @@ See the visual block diagrams:
 
 ## Repository Layout
 
+- `apps/`: Bazel-built applications (e.g. the SDV vehicle-signal service)
 - `layers/`: Yocto layers and custom metadata
 - `conf/`: Example build configuration templates
 - `scripts/`: Automation scripts for remote build and artifact flow
@@ -37,6 +38,7 @@ See the visual block diagrams:
 - Contributor onboarding: `docs/onboarding-checklist.md`
 - Cloud worker placeholder plan: `docs/cloud/aws-spot-worker-plan.md`
 - Local build instructions: `docs/local-build.md`
+- SDV app development with Bazel: `docs/sdv-bazel-app.md`
 
 ## What This Repository Does (Detailed)
 
@@ -163,6 +165,7 @@ git submodule update --init --recursive
 - `layers/meta-portfolio`
 - `layers/meta-security`
 - `layers/meta-ota`
+- `layers/meta-sdv` (Bazel-built SDV application; see `docs/sdv-bazel-app.md`)
 
 5. Configure GitHub repository secrets:
 - `GITHUB_TOKEN` — automatically provided by GitHub Actions; no manual setup required.
