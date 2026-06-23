@@ -1,0 +1,129 @@
+name: Build Health Dashboard
+
+# Native build-health observability for this repository's CI.
+#
+# This workflow uses ONLY the GitHub ecosystem (the Actions REST API via the
+# preinstalled `gh` CLI and the native Job Summary) to render a build-health
+# dashboard. There are no third-party actions and no external services: the
+# dashboard is published to the run's Job Summary, which appears directly on the
+# Actions run page in the GitHub UI.
+#
+# For each CI workflow it reports, over a configurable window of recent runs on
+# the default branch:
+#   * the latest run status,
+#   * the success rate,
+#   * the average run duration,
+#   * a small trend strip of recent outcomes.
+
+on:
+  schedule:
+    # Daily at 06:00 UTC. Adjust or remove to taste.
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      window:
+        description: "Number of recent runs to analyse per workflow"
+        required: false
+        default: "20"
+
+concurrency:
+  group: build-health-dashboard
+  cancel-in-progress: true
+
+permissions:
+  # Read-only access to workflow run history is all this needs.
+  actions: read
+  contents: read
+
+jobs:
+  dashboard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Render build-health dashboard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+          # Default branch to measure health against.
+          BRANCH: ${{ github.event.repository.default_branch }}
+          # Number of recent runs to analyse per workflow.
+          WINDOW: ${{ github.event.inputs.window || '20' }}
+        run: |
+          set -euo pipefail
+
+          summary="$GITHUB_STEP_SUMMARY"
+          {
+            echo "# 🩺 Build Health Dashboard"
+            echo ""
+            echo "Repository: \`${OWNER}/${REPO}\` · Branch: \`${BRANCH}\` · Window: last ${WINDOW} runs/workflow"
+            echo ""
+            echo "_Generated $(date -u '+%Y-%m-%d %H:%M UTC') — source: GitHub Actions REST API._"
+            echo ""
+            echo "| Workflow | Last run | Success rate | Avg duration | Recent trend |"
+            echo "| --- | --- | --- | --- | --- |"
+          } >> "$summary"
+
+          # List active (non-disabled) workflows, excluding this dashboard itself.
+          workflows="$(gh api "repos/${OWNER}/${REPO}/actions/workflows" --paginate \
+            --jq '.workflows[] | select(.state=="active") | {id: .id, name: .name, path: .path}')"
+
+          echo "$workflows" | jq -c '.' | while read -r wf; do
+            wf_id="$(echo "$wf" | jq -r '.id')"
+            wf_name="$(echo "$wf" | jq -r '.name')"
+            wf_path="$(echo "$wf" | jq -r '.path')"
+
+            # Skip this dashboard workflow.
+            if [[ "$wf_path" == *"build-health-dashboard.yml" ]]; then
+              continue
+            fi
+
+            # Fetch recent completed runs on the target branch for this workflow.
+            runs="$(gh api \
+              "repos/${OWNER}/${REPO}/actions/workflows/${wf_id}/runs?branch=${BRANCH}&status=completed&per_page=${WINDOW}" \
+              --jq '[.workflow_runs[] | {conclusion, created_at, updated_at}]')"
+
+            total="$(echo "$runs" | jq 'length')"
+
+            if [[ "$total" -eq 0 ]]; then
+              echo "| ${wf_name} | _no completed runs_ | – | – | – |" >> "$summary"
+              continue
+            fi
+
+            successes="$(echo "$runs" | jq '[.[] | select(.conclusion=="success")] | length')"
+            last_conclusion="$(echo "$runs" | jq -r '.[0].conclusion')"
+
+            # Success-rate percentage (integer).
+            rate="$(awk "BEGIN { printf \"%d\", ($successes/$total)*100 }")"
+
+            # Average duration in seconds, then humanised to Xm Ys.
+            avg_seconds="$(echo "$runs" | jq '
+              [.[] | ((.updated_at | fromdateiso8601) - (.created_at | fromdateiso8601))]
+              | (add / length) | floor')"
+            avg_min=$(( avg_seconds / 60 ))
+            avg_sec=$(( avg_seconds % 60 ))
+
+            # Map a conclusion to an emoji.
+            emoji() {
+              case "$1" in
+                success) echo "✅" ;;
+                failure) echo "❌" ;;
+                cancelled) echo "⚪" ;;
+                timed_out) echo "⏱️" ;;
+                *) echo "🟡" ;;
+              esac
+            }
+
+            last_emoji="$(emoji "$last_conclusion")"
+
+            # Build a trend strip (oldest → newest) from the most recent 10 runs.
+            trend="$(echo "$runs" | jq -r '[.[].conclusion] | reverse | .[-10:] | .[]' \
+              | while read -r c; do emoji "$c"; done | tr -d '\n')"
+
+            echo "| ${wf_name} | ${last_emoji} ${last_conclusion} | ${rate}% (${successes}/${total}) | ${avg_min}m ${avg_sec}s | ${trend} |" >> "$summary"
+          done
+
+          {
+            echo ""
+            echo "Legend: ✅ success · ❌ failure · ⚪ cancelled · ⏱️ timed out · 🟡 other"
+          } >> "$summary"
