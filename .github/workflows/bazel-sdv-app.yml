@@ -67,7 +67,7 @@ jobs:
       - name: Check for Bazel targets in apps/
         id: check_targets
         run: |
-          if find apps -name "BUILD.bazel" -o -name "BUILD" | grep -q .; then
+          if find apps -type f \( -name "BUILD.bazel" -o -name "BUILD" \) | grep -q .; then
             echo "has_targets=true" >> "$GITHUB_OUTPUT"
             echo "Bazel BUILD files found – build and test will run."
           else
