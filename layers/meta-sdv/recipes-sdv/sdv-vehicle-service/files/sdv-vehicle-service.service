@@ -1,0 +1,12 @@
+[Unit]
+Description=SDV vehicle-signal service (Bazel C++/Python demo)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/sdv-vehicle-service
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

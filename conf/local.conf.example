@@ -22,3 +22,15 @@ BB_DISKMON_DIRS ??= "\
     HALT,${TMPDIR},100M,1K \
     HALT,${DL_DIR},100M,1K \
     HALT,${SSTATE_DIR},100M,1K"
+
+# ── SDV Bazel application (layers/meta-sdv) ─────────────────────────────────
+# Pull the Bazel-built SDV vehicle-signal service into the image.  Uncomment to
+# install it (requires meta-sdv in bblayers.conf and systemd in the image; the
+# service unit is auto-enabled via SYSTEMD_AUTO_ENABLE).  See
+# docs/sdv-bazel-app.md.
+#
+# DISTRO_FEATURES:append = " systemd"
+# IMAGE_INSTALL:append = " sdv-vehicle-service"
+#
+# Or install the whole SDV package group:
+# IMAGE_INSTALL:append = " packagegroup-sdv"

@@ -82,3 +82,13 @@ if [[ ${#missing_cmds[@]} -gt 0 ]]; then
 fi
 
 echo "Sanity check passed: packages and required host tools are present."
+
+# Soft check: Bazel/Bazelisk powers the SDV applications under apps/.  It is
+# installed by bootstrap-worker-packages.sh from a network release, so warn
+# (rather than fail) when it is absent — e.g. on offline bootstraps.
+if command -v bazel >/dev/null 2>&1 || command -v bazelisk >/dev/null 2>&1; then
+  echo "Bazel/Bazelisk found: SDV Bazel builds are available."
+else
+  echo "WARNING: bazel/bazelisk not found in PATH."
+  echo "         SDV application builds (apps/) require it; install via scripts/bootstrap-worker-packages.sh."
+fi
