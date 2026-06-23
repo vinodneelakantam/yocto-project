@@ -3,7 +3,7 @@
 
 import unittest
 
-from python import vehicle_cli
+import vehicle_cli
 
 
 class VehicleCliTest(unittest.TestCase):
