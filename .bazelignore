@@ -1,0 +1,11 @@
+# Directories Bazel must not traverse when globbing the workspace.
+# Yocto sources/layers contain unrelated build metadata and large trees.
+sources
+layers
+conf
+docs
+scripts
+out
+.cache
+.devcontainer
+.github
