@@ -84,18 +84,26 @@ else
     echo "WARNING: Unsupported architecture '$(uname -m)' for Bazelisk; skipping."
   else
     bazelisk_url="https://github.com/bazelbuild/bazelisk/releases/download/${BAZELISK_VERSION}/bazelisk-linux-${bazelisk_arch}"
+    bazelisk_sha_url="${bazelisk_url}.sha256"
     echo "Installing Bazelisk ${BAZELISK_VERSION} (${bazelisk_arch}) from ${bazelisk_url}..."
     tmp_bazelisk="$(mktemp)"
-    if wget -qO "$tmp_bazelisk" "$bazelisk_url"; then
-      $SUDO install -m 0755 "$tmp_bazelisk" "$BAZELISK_INSTALL_PATH"
-      # Provide a `bazel` alias so tools that call `bazel` resolve to Bazelisk.
-      if ! command -v bazel >/dev/null 2>&1; then
-        $SUDO ln -sf "$BAZELISK_INSTALL_PATH" "$(dirname "$BAZELISK_INSTALL_PATH")/bazel"
+    tmp_bazelisk_sha="$(mktemp)"
+    if wget -qO "$tmp_bazelisk" "$bazelisk_url" && wget -qO "$tmp_bazelisk_sha" "$bazelisk_sha_url"; then
+      expected_sha="$(awk '{print $1}' "$tmp_bazelisk_sha")"
+      actual_sha="$(sha256sum "$tmp_bazelisk" | awk '{print $1}')"
+      if [[ "$expected_sha" != "$actual_sha" ]]; then
+        echo "WARNING: Bazelisk checksum mismatch; skipping install."
+      else
+        $SUDO install -m 0755 "$tmp_bazelisk" "$BAZELISK_INSTALL_PATH"
+        # Provide a `bazel` alias so tools that call `bazel` resolve to Bazelisk.
+        if ! command -v bazel >/dev/null 2>&1; then
+          $SUDO ln -sf "$BAZELISK_INSTALL_PATH" "$(dirname "$BAZELISK_INSTALL_PATH")/bazel"
+        fi
       fi
     else
-      echo "WARNING: Failed to download Bazelisk; SDV Bazel builds will be unavailable until it is installed."
+      echo "WARNING: Failed to download Bazelisk or its checksum; SDV Bazel builds will be unavailable until it is installed."
     fi
-    rm -f "$tmp_bazelisk"
+    rm -f "$tmp_bazelisk" "$tmp_bazelisk_sha"
   fi
 fi
 
