@@ -15,6 +15,7 @@ cc_library(
     name = "signal_store",
     srcs = ["src/signal_store.cc"],
     hdrs = ["src/signal_store.h"],
+    strip_include_prefix = "/apps/sdv-vehicle-service",
 )
 
 cc_test(
