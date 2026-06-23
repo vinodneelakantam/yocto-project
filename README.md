@@ -160,6 +160,7 @@ git submodule update --init --recursive
 3. Source repositories tracked as submodules:
 - `sources/poky` (`yoctoproject/poky`, branch `scarthgap`)
 - `sources/meta-openembedded` (`openembedded/meta-openembedded`, branch `scarthgap`)
+- `apps/sdv-vehicle-service` (`COVESA/vehicle_signal_specification`, branch `6.X`)
 
 4. Local layers included in this repository:
 - `layers/meta-portfolio`

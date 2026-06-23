@@ -11,7 +11,11 @@ LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/MIT;md5=0835ade698e0bcf8506ecda
 # The Bazel workspace that contains apps/sdv-vehicle-service.  By default this
 # is the project repository itself; pin SRCREV to a known-good commit.  Override
 # SDV_APP_GIT_URI / SRCREV to track a fork or a downstream application repo.
-SDV_APP_GIT_URI ?= "git://github.com/vinodneelakantam/yocto-project.git;protocol=https;branch=main"
+#
+# The application under apps/sdv-vehicle-service is a Git submodule, so the
+# `gitsm://` fetcher is used to recursively fetch submodule contents into the
+# workspace at ${S}; a plain `git://` fetch would leave the submodule empty.
+SDV_APP_GIT_URI ?= "gitsm://github.com/vinodneelakantam/yocto-project.git;protocol=https;branch=main"
 SRC_URI = "${SDV_APP_GIT_URI} \
            file://sdv-vehicle-service.service"
 
