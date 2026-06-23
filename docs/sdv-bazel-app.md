@@ -129,9 +129,7 @@ endpoint (bazel-remote, BuildBuddy, etc.) is provisioned.
    ```
 
    Or install the package group: `IMAGE_INSTALL:append = " packagegroup-sdv"`.
-3. Pin the recipe `SRCREV` to a known-good commit before building (the recipe
-   defaults to `AUTOREV` for convenience).
-4. Build an image as usual (for example `core-image-minimal`) and the service
+3. Pin the recipe `SRCREV` to a known-good commit before building. The recipe defaults to `AUTOREV`, but it will fail fast unless you explicitly opt in by setting `SDV_ALLOW_AUTOREV=1`.
    will be present and auto-started on boot.
 
 ## Scaling up to Apollo (or another large C++ app)
