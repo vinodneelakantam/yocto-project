@@ -75,6 +75,17 @@ mirror of upstream Yocto source trees.
 | **Publish Yocto Build Image** | `.github/workflows/publish-build-image.yml` | Builds and pushes `ghcr.io/<owner>/yocto-build-env` from `.devcontainer/Dockerfile`. |
 | **Bazel SDV App** | `.github/workflows/bazel-sdv-app.yml` | Fast inner-loop CI: builds and tests the `apps/` C/C++/Python code natively (no Yocto). |
 | **Sync Yocto Cache** | `.github/workflows/seed-cache-from-codespace.yml` | Bidirectional cache sync between a Codespace and the GitHub Actions cache. |
+| **Build Health Dashboard** | `.github/workflows/build-health-dashboard.yml` | Observability: renders a build-health dashboard (last status, success rate, average duration and recent trend per workflow) into the run's Job Summary using only the native Actions REST API. Runs daily and on demand. |
+
+#### Build health dashboard
+
+`build-health-dashboard.yml` provides native CI observability with no third-party
+actions or external services. On a daily schedule (and via **Run workflow**) it
+queries the GitHub Actions REST API with the preinstalled `gh` CLI and publishes
+a dashboard to the run's **Job Summary** (visible on the Actions run page). For
+each active workflow on the default branch it reports the latest run status, the
+success rate, the average run duration and a recent-outcome trend strip. Use the
+`window` input on manual runs to change how many recent runs are analysed.
 
 ### End-to-end Yocto build workflow
 
