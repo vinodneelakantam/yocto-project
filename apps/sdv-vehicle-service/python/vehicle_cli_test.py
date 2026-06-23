@@ -2,7 +2,10 @@
 """Unit tests for vehicle_cli using the standard library unittest module."""
 
 import unittest
+from pathlib import Path
+import sys
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import vehicle_cli
 
 
