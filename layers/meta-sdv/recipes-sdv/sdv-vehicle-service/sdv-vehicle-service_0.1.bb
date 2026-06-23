@@ -82,7 +82,7 @@ do_install() {
         ${D}${libdir}/sdv-vehicle-service/vehicle_cli.py
     cat > ${D}${bindir}/vehicle-cli <<EOF
 #!/bin/sh
-exec ${bindir}/python3 ${libdir}/sdv-vehicle-service/vehicle_cli.py "\$@"
+exec /usr/bin/env python3 ${libdir}/sdv-vehicle-service/vehicle_cli.py "\$@"
 EOF
     chmod 0755 ${D}${bindir}/vehicle-cli
 
