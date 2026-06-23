@@ -15,9 +15,18 @@ SDV_APP_GIT_URI ?= "git://github.com/vinodneelakantam/yocto-project.git;protocol
 SRC_URI = "${SDV_APP_GIT_URI} \
            file://sdv-vehicle-service.service"
 
-# Pin to a real commit before enabling this recipe in an image build.
+# Pin to a real commit for reproducible builds.  AUTOREV is allowed only as an
+# explicit opt-in (SDV_ALLOW_AUTOREV=1); otherwise the build fails fast so a
+# floating revision never slips into an image.
 SRCREV ?= "${AUTOREV}"
+SDV_ALLOW_AUTOREV ?= "0"
 PV = "0.1+git${SRCPV}"
+
+python () {
+    if d.getVar('SRCREV') == 'AUTOREV' and d.getVar('SDV_ALLOW_AUTOREV') != '1':
+        bb.fatal("sdv-vehicle-service: SRCREV is AUTOREV. Pin SRCREV to a commit "
+                 "for reproducible builds, or set SDV_ALLOW_AUTOREV=1 to override.")
+}
 
 S = "${WORKDIR}/git"
 

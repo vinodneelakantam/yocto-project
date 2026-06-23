@@ -29,6 +29,9 @@ concurrency:
   group: bazel-sdv-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
