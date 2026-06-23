@@ -118,7 +118,7 @@ set -e
 
 # Extract sstate and task summary lines from the captured log.
 _sstate_line="$(grep 'Sstate summary:' "$_BITBAKE_LOG" | tail -1 || true)"
-_sstate_pct="$(printf '%s' "$_sstate_line" | grep -oP '\d+(?=% complete)' | tail -1 || echo "n/a")"
+_sstate_pct="$(printf '%s' "$_sstate_line" | grep -o '[0-9][0-9]*% complete' | grep -o '^[0-9]*' || echo "n/a")"
 _tasks_line="$(grep 'Tasks Summary:' "$_BITBAKE_LOG" | tail -1 || true)"
 rm -f "$_BITBAKE_LOG"
 
@@ -142,7 +142,7 @@ DL_DIR: $DL_DIR
 SSTATE_DIR: $SSTATE_DIR
 Git revision: $(git -C "$BUILD_ROOT" rev-parse --short HEAD 2>/dev/null || echo "unknown")
 Timestamp: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
-Sstate cache hit: ${_sstate_pct}%
+Sstate cache hit: $( [[ "$_sstate_pct" == "n/a" ]] && echo "n/a" || echo "${_sstate_pct}%" )
 Sstate detail: ${_sstate_line:-none}
 Tasks detail: ${_tasks_line:-none}
 EOF

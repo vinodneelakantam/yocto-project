@@ -145,8 +145,15 @@ jobs:
               if [[ -n "$_latest_run_id" && "$_latest_run_id" != "null" ]]; then
                 _artifact_id="$(gh api \
                   "repos/${OWNER}/${REPO}/actions/runs/${_latest_run_id}/artifacts" \
-                  --jq '(.artifacts // []) | map(select(.name | test("yocto-build-metrics"))) | .[0].id // ""' \
+                  --jq '(.artifacts // []) | map(select(.name | test("yocto-build-metrics-remote"))) | .[0].id // ""' \
                   2>/dev/null || true)"
+                # Fall back to codespace metrics if no remote artifact exists.
+                if [[ -z "$_artifact_id" || "$_artifact_id" == "null" ]]; then
+                  _artifact_id="$(gh api \
+                    "repos/${OWNER}/${REPO}/actions/runs/${_latest_run_id}/artifacts" \
+                    --jq '(.artifacts // []) | map(select(.name | test("yocto-build-metrics"))) | .[0].id // ""' \
+                    2>/dev/null || true)"
+                fi
                 if [[ -n "$_artifact_id" && "$_artifact_id" != "null" ]]; then
                   _tmpdir="$(mktemp -d)"
                   curl -sL \
@@ -178,7 +185,7 @@ jobs:
             _cache_count="$(echo "$_cache_usage" | jq -r '.active_caches_count // 0')"
             _cache_mb=$(( _cache_bytes / 1024 / 1024 ))
             if (( _cache_mb >= 1024 )); then
-              _cache_display="$(awk "BEGIN { printf \"%.2f GiB\", $_cache_bytes / 1073741824 }")"
+              _cache_display="$(awk -v bytes="$_cache_bytes" 'BEGIN { printf "%.2f GiB", bytes / 1073741824 }')"
             else
               _cache_display="${_cache_mb} MiB"
             fi
