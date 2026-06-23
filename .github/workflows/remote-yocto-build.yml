@@ -226,6 +226,14 @@ jobs:
           path: artifacts
           if-no-files-found: error
 
+      - name: Upload build metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: yocto-build-metrics-codespace-${{ github.run_number }}
+          path: out/build-summary.txt
+          if-no-files-found: warn
+
   # ─────────────────────────────────────────────────────────────────────────
   # Job 2 — Remote build on a GitHub-hosted runner (primary CI path).
   #
@@ -401,3 +409,11 @@ jobs:
           name: yocto-images-remote-${{ github.run_number }}
           path: artifacts
           if-no-files-found: error
+
+      - name: Upload build metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: yocto-build-metrics-remote-${{ github.run_number }}
+          path: out/build-summary.txt
+          if-no-files-found: warn

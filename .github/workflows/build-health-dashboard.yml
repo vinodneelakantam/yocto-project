@@ -13,7 +13,12 @@ name: Build Health Dashboard
 #   * the latest run status,
 #   * the success rate,
 #   * the average run duration,
+#   * the average queue time (trigger → runner start),
+#   * the sstate cache reuse % (Yocto Build only, from the build-metrics artifact),
 #   * a small trend strip of recent outcomes.
+#
+# After the per-workflow table, a summary section shows the total GitHub Actions
+# cache storage consumed by this repository.
 
 on:
   schedule:
@@ -60,8 +65,8 @@ jobs:
             echo ""
             echo "_Generated $(date -u '+%Y-%m-%d %H:%M UTC') — source: GitHub Actions REST API._"
             echo ""
-            echo "| Workflow | Last run | Success rate | Avg duration | Recent trend |"
-            echo "| --- | --- | --- | --- | --- |"
+            echo "| Workflow | Last run | Success rate | Avg duration | Avg queue | Sstate reuse | Recent trend |"
+            echo "| --- | --- | --- | --- | --- | --- | --- |"
           } >> "$summary"
 
           # List active (non-disabled) workflows, excluding this dashboard itself.
@@ -81,12 +86,12 @@ jobs:
             # Fetch recent completed runs on the target branch for this workflow.
             runs="$(gh api \
               "repos/${OWNER}/${REPO}/actions/workflows/${wf_id}/runs?branch=${BRANCH}&status=completed&per_page=${WINDOW}" \
-              --jq '[.workflow_runs[] | {conclusion, run_started_at, updated_at}]')"
+              --jq '[.workflow_runs[] | {conclusion, created_at, run_started_at, updated_at}]')"
 
             total="$(echo "$runs" | jq 'length')"
 
             if [[ "$total" -eq 0 ]]; then
-              echo "| ${wf_name} | _no completed runs_ | – | – | – |" >> "$summary"
+              echo "| ${wf_name} | _no completed runs_ | – | – | – | – | – |" >> "$summary"
               continue
             fi
 
@@ -103,6 +108,14 @@ jobs:
               | (add / length) | floor')"
             avg_min=$(( avg_seconds / 60 ))
             avg_sec=$(( avg_seconds % 60 ))
+
+            # Average queue time (trigger → runner start), in seconds.
+            avg_queue_secs="$(echo "$runs" | jq '
+              [.[] | select(.created_at != null and .run_started_at != null)
+               | ((.run_started_at | fromdateiso8601) - (.created_at | fromdateiso8601))]
+              | if length > 0 then (add / length) | floor else 0 end')"
+            avg_q_min=$(( avg_queue_secs / 60 ))
+            avg_q_sec=$(( avg_queue_secs % 60 ))
 
             # Map a conclusion to an emoji.
             emoji() {
@@ -121,10 +134,58 @@ jobs:
             trend="$(echo "$runs" | jq -r '[.[].conclusion] | reverse | .[-10:] | .[]' \
               | while read -r c; do emoji "$c"; done | tr -d '\n')"
 
-            echo "| ${wf_name} | ${last_emoji} ${last_conclusion} | ${rate}% (${successes}/${total}) | ${avg_min}m ${avg_sec}s | ${trend} |" >> "$summary"
+            # Sstate cache reuse % — fetched from the lightweight metrics artifact
+            # uploaded by each Yocto Build run.  Only attempted for Yocto Build;
+            # all other workflows show "–".
+            sstate_pct="–"
+            if [[ "$wf_name" == "Yocto Build" ]]; then
+              _latest_run_id="$(gh api \
+                "repos/${OWNER}/${REPO}/actions/workflows/${wf_id}/runs?branch=${BRANCH}&status=completed&per_page=1" \
+                --jq '(.workflow_runs // []) | .[0].id // ""' 2>/dev/null || true)"
+              if [[ -n "$_latest_run_id" && "$_latest_run_id" != "null" ]]; then
+                _artifact_id="$(gh api \
+                  "repos/${OWNER}/${REPO}/actions/runs/${_latest_run_id}/artifacts" \
+                  --jq '(.artifacts // []) | map(select(.name | test("yocto-build-metrics"))) | .[0].id // ""' \
+                  2>/dev/null || true)"
+                if [[ -n "$_artifact_id" && "$_artifact_id" != "null" ]]; then
+                  _tmpdir="$(mktemp -d)"
+                  curl -sL \
+                    -H "Authorization: Bearer $GH_TOKEN" \
+                    -H "Accept: application/vnd.github+json" \
+                    "https://api.github.com/repos/${OWNER}/${REPO}/actions/artifacts/${_artifact_id}/zip" \
+                    -o "${_tmpdir}/metrics.zip" 2>/dev/null || true
+                  if [[ -s "${_tmpdir}/metrics.zip" ]]; then
+                    _pct="$(unzip -p "${_tmpdir}/metrics.zip" 2>/dev/null \
+                      | grep 'Sstate cache hit:' | grep -oP '\d+' | head -1 || true)"
+                    [[ -n "$_pct" ]] && sstate_pct="${_pct}%"
+                  fi
+                  rm -rf "$_tmpdir"
+                fi
+              fi
+            fi
+
+            echo "| ${wf_name} | ${last_emoji} ${last_conclusion} | ${rate}% (${successes}/${total}) | ${avg_min}m ${avg_sec}s | ${avg_q_min}m ${avg_q_sec}s | ${sstate_pct} | ${trend} |" >> "$summary"
           done
 
           {
             echo ""
             echo "Legend: ✅ success · ❌ failure · ⚪ cancelled · ⏱️ timed out · 🟡 other"
+            echo ""
+            echo "## 📦 GitHub Actions Cache Storage"
+            echo ""
+            _cache_usage="$(gh api "repos/${OWNER}/${REPO}/actions/cache/usage" 2>/dev/null || echo '{}')"
+            _cache_bytes="$(echo "$_cache_usage" | jq -r '.active_caches_size_in_bytes // 0')"
+            _cache_count="$(echo "$_cache_usage" | jq -r '.active_caches_count // 0')"
+            _cache_mb=$(( _cache_bytes / 1024 / 1024 ))
+            if (( _cache_mb >= 1024 )); then
+              _cache_display="$(awk "BEGIN { printf \"%.2f GiB\", $_cache_bytes / 1073741824 }")"
+            else
+              _cache_display="${_cache_mb} MiB"
+            fi
+            echo "| Metric | Value |"
+            echo "| --- | --- |"
+            echo "| Active cache entries | ${_cache_count} |"
+            echo "| Total storage used   | ${_cache_display} |"
+            echo ""
+            echo "> 💡 The free GitHub Actions plan includes 10 GiB cache storage. Entries unused for 7 days are evicted automatically."
           } >> "$summary"
