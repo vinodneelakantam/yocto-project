@@ -59,7 +59,12 @@ export CXXFLAGS
 export LDFLAGS
 
 do_compile() {
-    if ! command -v bazel >/dev/null 2>&1; then
+    bazel_cmd=""
+    if command -v bazel >/dev/null 2>&1; then
+        bazel_cmd="bazel"
+    elif command -v bazelisk >/dev/null 2>&1; then
+        bazel_cmd="bazelisk"
+    else
         bbfatal "bazel/bazelisk not found on the build host. Run scripts/bootstrap-worker-packages.sh."
     fi
 
@@ -69,7 +74,7 @@ do_compile() {
     fi
 
     cd "${S}"
-    bazel --output_base="${SDV_BAZEL_OUTPUT_BASE}" \
+    ${bazel_cmd} --output_base="${SDV_BAZEL_OUTPUT_BASE}" \
         build \
         --config=yocto-cross \
         ${distdir_arg} \
