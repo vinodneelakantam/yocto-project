@@ -6,7 +6,7 @@
 # fetches inside Yocto (BB_NO_NETWORK friendly).
 
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
-load("@rules_python//python:defs.bzl", "py_binary", "py_test")
+load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -33,10 +33,17 @@ cc_binary(
 )
 
 # ── Python CLI tool that talks to the same VSS-style signal paths ──────────
+py_library(
+    name = "vehicle_cli",
+    srcs = ["python/vehicle_cli.py"],
+    imports = ["apps/sdv-vehicle-service/python"],
+)
+
 py_binary(
     name = "vehicle-cli",
     srcs = ["python/vehicle_cli.py"],
     main = "python/vehicle_cli.py",
+    imports = ["apps/sdv-vehicle-service/python"],
 )
 
 py_test(
@@ -44,5 +51,5 @@ py_test(
     size = "small",
     srcs = ["python/vehicle_cli_test.py"],
     main = "python/vehicle_cli_test.py",
-    deps = [":vehicle-cli"],
+    deps = [":vehicle_cli"],
 )
