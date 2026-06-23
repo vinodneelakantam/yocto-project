@@ -1,18 +1,27 @@
 # Yocto GitHub-Centric Build Project
 
-This repository implements a GitHub-first workflow for Yocto development:
-- GitHub is the control and visibility layer for your recipes/apps and build history
-- External compute is the build execution layer (VPS, AWS Spot, or similar)
-- Artifacts and logs are always published back to GitHub Actions
+A GitHub-first workflow for building a custom Yocto Linux distribution and the
+Software-Defined-Vehicle (SDV) application that ships inside it.
+
+The guiding idea is a clean split between **coordination** and **compute**:
+
+- **GitHub is the coordination layer** — source of truth for recipes, layers,
+  and apps; the place where builds are triggered, tracked, and where logs and
+  artifacts are published.
+- **A reproducible build environment is the compute layer** — BitBake runs
+  inside a pre-built container image so the toolchain is identical in CI, in
+  Codespaces, and on any external worker.
 
 ## Purpose In One View
 
-This repo is the coordination hub and public frontend for your Yocto work.
+This repo is the coordination hub and public frontend for the Yocto work.
 
-- Team members push recipes/app changes here.
-- GitHub Actions starts and tracks the build process.
-- Heavy Yocto builds run on external compute when GitHub/Codespaces resources are not enough.
-- Build outputs are returned to GitHub as artifacts for review/download.
+- Team members push recipe / layer / app changes here.
+- GitHub Actions builds the image and tracks the build process end to end.
+- Heavy Yocto builds run inside a frozen container image (GHCR) on a
+  GitHub-hosted runner, with an opt-in Codespace path and an optional external
+  worker path (VPS / AWS Spot) for when more compute is needed.
+- Build outputs are returned to GitHub as downloadable workflow artifacts.
 
 See the visual block diagrams:
 
@@ -25,76 +34,95 @@ See the visual block diagrams:
 
 ## Repository Layout
 
-- `apps/`: Bazel-built applications (e.g. the SDV vehicle-signal service)
-- `layers/`: Yocto layers and custom metadata
-- `conf/`: Example build configuration templates
-- `scripts/`: Automation scripts for remote build and artifact flow
-- `docs/`: Architecture, security, OTA, and operations notes
-- `.github/workflows/`: CI workflows that orchestrate remote builds
+- `apps/`: Bazel-built applications — the SDV vehicle-signal service (C++/Python)
+- `layers/`: Project Yocto layers (`meta-portfolio`, `meta-security`, `meta-ota`, `meta-sdv`)
+- `sources/`: Upstream Yocto sources tracked as pinned Git submodules
+- `conf/`: Example BitBake configuration templates (`local.conf`, `bblayers.conf`)
+- `scripts/`: Build, worker-bootstrap, cache-sync, and GitHub automation scripts
+- `docs/`: Architecture, security/OTA, conventions, onboarding, and SDV app notes
+- `.github/workflows/`: CI workflows that orchestrate builds and image publishing
+- `.devcontainer/`: Dev Container / Codespaces definition with all build tools pre-installed
+- `MODULE.bazel`, `.bazelrc`, `.bazelversion`: Bazel module config for the `apps/` builds
 
 ## Project Guardrails
 
 - Repository conventions: `docs/repo-conventions.md`
 - Contributor onboarding: `docs/onboarding-checklist.md`
-- Cloud worker placeholder plan: `docs/cloud/aws-spot-worker-plan.md`
 - Local build instructions: `docs/local-build.md`
+- Architecture deep-dive: `docs/architecture.md`
+- Security and OTA design: `docs/security-and-ota.md`
 - SDV app development with Bazel: `docs/sdv-bazel-app.md`
+- Cloud worker placeholder plan: `docs/cloud/aws-spot-worker-plan.md`
 
 ## What This Repository Does (Detailed)
 
-This repository is a **Yocto build orchestrator and showcase**, not a full mirror of upstream Yocto source trees.
+This repository is a **Yocto build orchestrator and showcase**, not a full
+mirror of upstream Yocto source trees.
 
 ### Primary responsibilities
 
 - Keep upstream Yocto sources in `sources/` as **Git submodules** (pinned to known commits)
-- Store project-specific layers/recipes/apps in `layers/`
+- Store project-specific layers / recipes / apps in `layers/` and `apps/`
 - Provide reusable build configuration templates in `conf/`
-- Automate remote builds using GitHub Actions with external cost-optimized compute
+- Build the image in CI inside a frozen container so the toolchain never drifts
 - Return build outputs to GitHub as downloadable workflow artifacts
 
-### End-to-end workflow
+### CI workflows
 
-Two parallel jobs run on every push to `main` (or manual dispatch):
+| Workflow | File | Purpose |
+|---|---|---|
+| **Yocto Build** | `.github/workflows/remote-yocto-build.yml` | Primary image build. Ensures the GHCR image exists, then runs BitBake. Includes an opt-in Codespace job. |
+| **Publish Yocto Build Image** | `.github/workflows/publish-build-image.yml` | Builds and pushes `ghcr.io/<owner>/yocto-build-env` from `.devcontainer/Dockerfile`. |
+| **Bazel SDV App** | `.github/workflows/bazel-sdv-app.yml` | Fast inner-loop CI: builds and tests the `apps/` C/C++/Python code natively (no Yocto). |
+| **Sync Yocto Cache** | `.github/workflows/seed-cache-from-codespace.yml` | Bidirectional cache sync between a Codespace and the GitHub Actions cache. |
 
-**Remote build — primary CI path (GitHub-hosted runner + Docker):**
+### End-to-end Yocto build workflow
+
+The **Yocto Build** workflow runs on every push to `main` (or manual dispatch):
+
+**Remote build — primary CI path (GitHub-hosted runner + GHCR container):**
 1. A change is pushed to `main` or the workflow is dispatched.
-2. ~25 GB of unused vendor toolchains are removed to make room for Yocto.
-3. A submodule revision hash is computed so cache keys track upstream layer pins.
-4. `actions/cache` restores Yocto `downloads` and `sstate-cache` from prior runs.
-5. Submodules are initialized.
-6. BitBake runs inside `ghcr.io/<owner>/yocto-build-env` — all tools are
-   pre-installed in the image; no package installation at build time.
-7. Updated caches are saved back for the next run.
-8. Built images and the build summary are uploaded as GitHub Actions artifacts.
+2. `ensure-build-image` confirms `ghcr.io/<owner>/yocto-build-env` exists, and
+   builds/pushes it from `.devcontainer/Dockerfile` if it is missing.
+3. ~25 GB of unused vendor toolchains are removed to make room for Yocto's `tmp/`.
+4. A submodule revision hash is computed so cache keys track upstream layer pins.
+5. `actions/cache` restores Yocto `downloads` and per-layer `sstate-cache` from prior runs.
+6. Submodules are initialized.
+7. `scripts/remote-build.sh` runs BitBake inside `ghcr.io/<owner>/yocto-build-env`
+   — all tools are pre-installed in the image; no package installation at build time.
+8. Updated caches are saved back for the next run.
+9. Built images and the build summary are uploaded as GitHub Actions artifacts.
 
 **Codespace build — opt-in (self-hosted runner):**
 Available on manual dispatch when a Codespace runner is active
-(`run_codespace=true`). Uses the same build scripts and cache paths but
-runs directly inside the prebuilt devcontainer.
+(`run_codespace=true`). Uses the same build scripts and cache paths but runs
+directly inside the prebuilt devcontainer.
 
-### What gets built where
+### Compute model
 
-- Built on external compute (VPS, AWS Spot, or similar):
-	- Yocto image targets (for example `core-image-minimal`)
-	- BitBake outputs and logs
-	- Full repo checkout plus submodules
-	- Compiler/toolchain dependencies installed as packages on build nodes
-	- Build cache reuse (`sstate-cache`, `downloads`, and other reusable artifacts)
-- Built on GitHub runner:
-	- No heavy Yocto compile workload
-	- Orchestration tasks only (trigger, sync/bootstrap, collect, upload)
+- **Primary:** GitHub-hosted `ubuntu-latest` runner executes BitBake inside the
+  GHCR container image. This keeps GitHub as the single place to view build
+  status, logs, and outputs, with no flaky `apt` installs at build time.
+- **Opt-in:** A self-hosted Codespace runner can run the same build interactively.
+- **Optional / future:** External cost-optimized compute (VPS or AWS Spot) can
+  run the same `scripts/remote-build.sh`. The lifecycle automation for this is a
+  placeholder today — see `scripts/cloud/aws-spot-build-placeholder.sh` and
+  `docs/cloud/aws-spot-worker-plan.md`. Workers are treated as disposable.
 
-### Compute strategy
+### Where the Yocto compile workload runs
 
-- Primary goal: keep GitHub as the single place to view build status, logs, and outputs.
-- If GitHub/Codespaces compute is insufficient, run builds on cloud spot machines (for example AWS Spot) to reduce cost.
-- Build nodes are treated as disposable workers; checkout and dependency setup happen on demand.
-- Caching is used to keep rebuild times and costs low.
+- Inside the GHCR container (on the runner or any worker):
+  - Yocto image targets (for example `core-image-minimal`)
+  - BitBake outputs and logs
+  - Full repo checkout plus submodules
+  - Build cache reuse (`sstate-cache`, `downloads`)
+- On the bare GitHub runner:
+  - No heavy compile workload directly — only orchestration (disk cleanup,
+    cache restore/save, submodule init, container launch, artifact upload)
 
-### Build Cache Reuse Across Environments
+### Build cache reuse across environments
 
-Remote workflow `.github/workflows/remote-yocto-build.yml` manages three cache
-layers across runs:
+The **Yocto Build** workflow manages three cache layers across runs:
 
 | Layer | Mechanism | What is cached |
 |---|---|---|
@@ -102,33 +130,53 @@ layers across runs:
 | Yocto source tarballs | `actions/cache` → `.cache/yocto/downloads` | Upstream source archives fetched by BitBake |
 | Yocto sstate | `actions/cache` → `.cache/yocto/sstate-cache` | Incremental build objects; avoids recompiling unchanged recipes |
 
-Cache keys include a hash of all pinned submodule commit SHAs so the key
-automatically changes when an upstream layer is bumped, while still allowing
-fallback to the closest previous run via `restore-keys`.
+The sstate layer is split into per-layer cache keys (upstream, `meta-portfolio`,
+`meta-security`, `meta-ota`). Because sstate files are content-addressed, the
+entries merge into one `SSTATE_DIR` conflict-free, and a change to one custom
+layer only busts that layer's key. All keys include a hash of the pinned
+submodule commit SHAs, so the key changes automatically when an upstream layer
+is bumped, while `restore-keys` still allow fallback to the closest previous run.
 
-This makes dependency and build cache reusable across new Codespaces, new runners,
-and future workflow runs in the same repository.
+This makes dependency and build cache reusable across new Codespaces, new
+runners, and future workflow runs in the same repository.
 
-For local builds (and any non-GitHub-runner environment), set:
+For local builds (and any non-GitHub-runner environment), an optional shared
+cache server can be used instead of (or alongside) `actions/cache`:
 
 ```bash
 export YOCTO_CENTRAL_CACHE_RSYNC="<user>@<host>:/srv/yocto-cache"
 ```
 
-Then run build scripts normally. They will:
+Then run the build scripts normally. They will:
 
 - Pull `downloads` and `sstate-cache` from the central location before build
 - Push updated cache back after build
 
-Prepare central host directory once:
+Prepare the central host directory once:
 
 ```bash
 ssh <user>@<host> "mkdir -p /srv/yocto-cache/downloads /srv/yocto-cache/sstate-cache"
 ```
 
+### The SDV application
+
+`apps/sdv-vehicle-service` is a small COVESA VSS / Eclipse KUKSA-style
+Software-Defined-Vehicle service, built with **Bazel** to exercise the
+C/C++/Python toolchain and the Yocto integration. It is dependency-light so it
+builds with no network fetches — which keeps it reproducible inside Yocto, where
+the network is disabled during the build.
+
+- Inner loop: build and test natively (`bazel test //apps/...`), validated by the
+  **Bazel SDV App** workflow.
+- Outer loop: the recipe `layers/meta-sdv/recipes-sdv/sdv-vehicle-service` drives
+  the same Bazel build with the Yocto SDK cross toolchain and installs the
+  binary, the Python CLI, and a systemd unit into the target image.
+
+See `apps/sdv-vehicle-service/README.md` and `docs/sdv-bazel-app.md`.
+
 ### Why submodules are used
 
-- You keep a clean history of local project changes.
+- A clean history of local project changes is kept separate from upstream code.
 - Upstream layer provenance remains explicit.
 - Updating upstream code is intentional and reviewable via submodule commit changes.
 
@@ -173,15 +221,14 @@ git submodule update --init --recursive
   (example: `user@host:/srv/yocto-cache`). When set, `remote-build.sh` syncs
   `downloads` and `sstate-cache` to/from that server in addition to `actions/cache`.
 
-> **Note — GHCR image prerequisite:** The `remote-build` CI job pulls
-> `ghcr.io/<owner>/yocto-build-env:latest`. Run the
-> **Publish Yocto Build Image** workflow manually once (or push a change to
-> `.devcontainer/Dockerfile`) to build and push the image before the first
-> remote build runs.
+> **Note — GHCR image prerequisite:** The **Yocto Build** workflow pulls
+> `ghcr.io/<owner>/yocto-build-env:latest`. Its `ensure-build-image` job builds
+> and pushes the image automatically on the first run if it is missing; you can
+> also run the **Publish Yocto Build Image** workflow manually to pre-build it.
 
-6. Trigger a remote build:
+6. Trigger a build:
 - Push to `main`, or
-- Run workflow `Remote Yocto Build` manually from Actions tab
+- Run the **Yocto Build** workflow manually from the Actions tab
 
 Or trigger once by CLI:
 
@@ -190,30 +237,40 @@ export GH_REPO="owner/repo"
 ./scripts/github/run-workflow-once.sh
 ```
 
+7. Build and test the SDV app locally (no Yocto required):
+
+```bash
+bazel test //apps/sdv-vehicle-service/...
+bazel run //apps/sdv-vehicle-service:vehicle-cli -- list
+```
+
 ## Security Notes
 
 - Do not commit private keys or signing keys
 - Keep signing material on secure infrastructure (HSM or restricted key host)
-- Use least-privilege VPS user for CI-triggered operations
+- Use a least-privilege user for any CI-triggered operations on external workers
+
+See `docs/security-and-ota.md` for the signing and OTA design.
 
 ## Next Steps
 
-- Add your real layer manifests in `layers/`
-- Implement signing and OTA pipeline from `docs/security-and-ota.md`
-- Extend workflow with release tagging and artifact retention policy
+- Add real layer manifests and recipes in `layers/`
+- Implement the signing and OTA pipeline from `docs/security-and-ota.md`
+- Extend the workflow with release tagging and an artifact retention policy
+- Flesh out external-worker automation from `docs/cloud/aws-spot-worker-plan.md`
 
 ## Codespaces Reuse (No Reinstall Every Time)
 
-This repository now includes a Dev Container definition at `.devcontainer/`.
+This repository includes a Dev Container definition at `.devcontainer/`.
 The container image installs Yocto worker dependencies during image build time
-(including `zstd` which provides `pzstd`).
+(including `zstd`, which provides `pzstd`) and Bazelisk for the `apps/` builds.
 
 To make this reusable across new Codespaces in GitHub:
 
-1. Open repository **Settings -> Codespaces -> Prebuild configurations**.
+1. Open repository **Settings → Codespaces → Prebuild configurations**.
 2. Create a prebuild for branch `main` using the default `.devcontainer/devcontainer.json`.
 3. Keep prebuilds enabled for the regions and machine type you use.
-4. Recommended machine is defined in `.devcontainer/devcontainer.json` as 8 CPUs and 16 GB RAM.
+4. The recommended machine is defined in `.devcontainer/devcontainer.json` (16 CPUs, 32 GB RAM, 128 GB storage).
 
 With prebuilds enabled, new Codespaces pull the cached prebuilt image instead of
 running package installs from scratch.
