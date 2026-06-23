@@ -6,7 +6,3 @@
 	path = sources/meta-openembedded
 	url = https://github.com/openembedded/meta-openembedded.git
 	branch = scarthgap
-[submodule "apps/sdv-vehicle-service"]
-	path = apps/sdv-vehicle-service
-	url = https://github.com/COVESA/vehicle_signal_specification.git
-	branch = 6.X

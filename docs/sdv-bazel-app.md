@@ -8,21 +8,9 @@ small service to a large C++ codebase.
 
 ## Chosen application and rationale
 
-The application under `apps/sdv-vehicle-service` is **not vendored as a
-one-time copy**; it is tracked as a **Git submodule** so its source lives in,
-and is updated from, a separate upstream repository. The submodule is pinned to
-a known commit, keeping builds reproducible while making upstream updates
-explicit and reviewable (the same model this repository already uses for
-`sources/poky` and `sources/meta-openembedded`).
-
-The submodule currently points at the public **COVESA Vehicle Signal
-Specification** repository (`COVESA/vehicle_signal_specification`, branch
-`6.X`) — the canonical, vehicle-data-centric SDV project that the service is
-based on. Repoint the submodule URL/commit to a different upstream (for example
-a dedicated application repository) when one is available.
-
-Two well-known SDV families fit the C/C++/Python + Bazel + "large C++ future"
-requirement:
+The repository previously shipped only placeholder layers, so this is a
+greenfield integration. Two well-known SDV families fit the C/C++/Python +
+Bazel + "large C++ future" requirement:
 
 - **Baidu Apollo** (`ApolloAuto/apollo`) — the canonical large, Bazel-native,
   C++/Python autonomous-driving platform. It is the best showcase of Bazel's
@@ -31,22 +19,13 @@ requirement:
   stack (signal specifications and a data broker). Easy to cross-compile and
   run on `qemux86-64`, and still a recognized SDV project.
 
-The Bazel + Yocto integration described below is structured so the same
-mechanism scales up to an Apollo-sized tree. The reference application is
-intentionally dependency-light so it builds with no external network fetches —
-which matters inside Yocto, where the network is disabled during the build.
-
-### Initialising the submodule
-
-Because the application is a submodule, initialise it after cloning before
-building:
-
-```bash
-git submodule update --init --recursive
-```
-
-(or clone with `git clone --recurse-submodules`). CI checks out submodules
-recursively, and the Yocto recipe fetches them via the `gitsm://` fetcher.
+To get a working end-to-end vertical slice first, this repository ships a small
+**COVESA VSS / KUKSA-style vehicle-signal service** under
+`apps/sdv-vehicle-service`, structured so the same Bazel + Yocto mechanism
+scales up to an Apollo-sized tree. The application is intentionally
+dependency-light (native Bazel `cc_*` rules + Python standard library) so it
+builds with no external network fetches — which matters inside Yocto, where the
+network is disabled during the build.
 
 ## The two build loops
 

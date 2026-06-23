@@ -39,10 +39,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          # The SDV application under apps/ is tracked as a Git submodule, so it
-          # must be initialised for the Bazel build/test below to see its files.
-          submodules: recursive
 
       # Cache Bazel's repository and disk caches between runs.  This is the
       # Bazel analogue of the Yocto downloads/sstate caches and keeps rebuilds
