@@ -81,7 +81,7 @@ jobs:
             # Fetch recent completed runs on the target branch for this workflow.
             runs="$(gh api \
               "repos/${OWNER}/${REPO}/actions/workflows/${wf_id}/runs?branch=${BRANCH}&status=completed&per_page=${WINDOW}" \
-              --jq '[.workflow_runs[] | {conclusion, created_at, updated_at}]')"
+              --jq '[.workflow_runs[] | {conclusion, run_started_at, updated_at}]')"
 
             total="$(echo "$runs" | jq 'length')"
 
@@ -96,9 +96,10 @@ jobs:
             # Success-rate percentage (integer).
             rate="$(awk "BEGIN { printf \"%d\", ($successes/$total)*100 }")"
 
-            # Average duration in seconds, then humanised to Xm Ys.
+            # Average execution duration in seconds (uses run_started_at to
+            # exclude queue/wait time), then humanised to Xm Ys.
             avg_seconds="$(echo "$runs" | jq '
-              [.[] | ((.updated_at | fromdateiso8601) - (.created_at | fromdateiso8601))]
+              [.[] | ((.updated_at | fromdateiso8601) - (.run_started_at | fromdateiso8601))]
               | (add / length) | floor')"
             avg_min=$(( avg_seconds / 60 ))
             avg_sec=$(( avg_seconds % 60 ))
