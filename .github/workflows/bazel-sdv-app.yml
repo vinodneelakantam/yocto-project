@@ -58,10 +58,31 @@ jobs:
           restore-keys: |
             bazel-${{ runner.os }}-
 
+      # Detect whether the apps/ directory contains any Bazel BUILD files.
+      # When apps/sdv-vehicle-service is a submodule that points to a repo
+      # without Bazel targets (e.g. COVESA/vehicle_signal_specification), the
+      # build and test steps must be skipped to avoid a hard CI failure.  The
+      # outcome is exposed as the step output `has_targets` so the subsequent
+      # steps can gate on it.
+      - name: Check for Bazel targets in apps/
+        id: check_targets
+        run: |
+          if find apps -name "BUILD.bazel" -o -name "BUILD" | grep -q .; then
+            echo "has_targets=true" >> "$GITHUB_OUTPUT"
+            echo "Bazel BUILD files found – build and test will run."
+          else
+            echo "has_targets=false" >> "$GITHUB_OUTPUT"
+            echo "No Bazel BUILD files found under apps/. Build and test steps will be skipped."
+            echo "This is expected while apps/sdv-vehicle-service points to a repository"
+            echo "that does not yet contain Bazel targets."
+          fi
+
       # Bazelisk ships preinstalled on ubuntu-latest runners and honours
       # .bazelversion to fetch the pinned Bazel release.
       - name: Build SDV application
+        if: steps.check_targets.outputs.has_targets == 'true'
         run: bazelisk build --config=ci //apps/...
 
       - name: Test SDV application
+        if: steps.check_targets.outputs.has_targets == 'true'
         run: bazelisk test --config=ci //apps/...
