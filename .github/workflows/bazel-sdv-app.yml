@@ -39,6 +39,14 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Init SDV app submodule (if configured)
+        run: |
+          if [[ -f .gitmodules ]] && git config -f .gitmodules --get submodule.apps/sdv-vehicle-service.path >/dev/null 2>&1; then
+            git submodule update --init --recursive apps/sdv-vehicle-service
+          fi
 
       # Cache Bazel's repository and disk caches between runs.  This is the
       # Bazel analogue of the Yocto downloads/sstate caches and keeps rebuilds
