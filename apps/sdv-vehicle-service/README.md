@@ -10,6 +10,8 @@ reproducible inside Yocto where the network is disabled during the build. The
 same Bazel structure scales up to a large C++ codebase (e.g. Baidu Apollo)
 later; see `docs/sdv-bazel-app.md`.
 
+Detailed docs: https://vinodneelakantam.github.io/yocto-project/
+
 ## Components
 
 | Target | Language | Purpose |

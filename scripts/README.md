@@ -1,5 +1,7 @@
 # Scripts
 
+Detailed docs: https://vinodneelakantam.github.io/yocto-project/
+
 - `remote-build.sh`: Runs BitBake on remote compute and stages outputs in `out/`
 - `bootstrap-worker-packages.sh`: Installs required Yocto build dependencies on Debian/Ubuntu workers
 - `github/create-repo.sh`: Creates a GitHub repo from this directory and pushes it

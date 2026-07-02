@@ -251,7 +251,7 @@ def render_html(root: Path, docs: list[Path]) -> str:
             )
 
         image_section = ""
-        if image_cards:
+        if image_cards and rel_path != "docs/diagram-gallery.md":
             image_section = "\n".join(
                 [
                     '<div class="doc-images" aria-label="Referenced images">',
@@ -273,7 +273,10 @@ def render_html(root: Path, docs: list[Path]) -> str:
         sections.append(
             "\n".join(
                 [
-                    f'<section id="{anchor}" class="doc-section">',
+              (
+                f'<section id="{anchor}" class="doc-section'
+                f'{" doc-gallery-section" if rel_path == "docs/diagram-gallery.md" else ""}">'
+              ),
                     '<div class="doc-meta">',
                     f"<h2>{html.escape(heading)}</h2>",
                     f'<p class="doc-path">Source: {html.escape(rel_path)}</p>',
@@ -390,6 +393,20 @@ def render_html(root: Path, docs: list[Path]) -> str:
         border: 1px solid var(--line);
         padding: 0.45rem 0.6rem;
         text-align: left;
+      }}
+      .doc-content img {{
+        display: block;
+        max-width: 100%;
+        height: auto;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        margin: 0.6rem 0 1rem;
+        background: #f8fbf8;
+      }}
+      .doc-gallery-section .doc-content h2 {{
+        margin-top: 1.2rem;
+        padding-top: 0.8rem;
+        border-top: 1px dashed var(--line);
       }}
       .doc-images {{
         margin-top: 1.2rem;
