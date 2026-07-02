@@ -61,6 +61,9 @@ After success:
 - `out/build-summary.txt`
 - `out/images/` (if deploy images were produced)
 
+To understand artifact types and usage in `out/images/<machine>/`, see:
+- `docs/image-output-artifacts.md`
+
 ## Troubleshooting
 
 - Missing Poky init script:
@@ -76,4 +79,5 @@ After success:
 
 - Onboarding checklist: `docs/onboarding-checklist.md`
 - SDV Bazel + Yocto integration: `docs/sdv-bazel-app.md`
+- Yocto image artifacts reference: `docs/image-output-artifacts.md`
 - Scripts inventory: `scripts/README.md`

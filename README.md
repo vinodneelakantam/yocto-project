@@ -41,6 +41,7 @@ bazel test //apps/sdv-vehicle-service/...
 | Current architecture and roadmap boundaries | `docs/architecture.md` |
 | Day-1 contributor setup | `docs/onboarding-checklist.md` |
 | Local build operation and troubleshooting | `docs/local-build.md` |
+| Yocto image outputs and artifact meanings | `docs/image-output-artifacts.md` |
 | Repository standards and change rules | `docs/repo-conventions.md` |
 | Security and OTA posture (current vs planned) | `docs/security-and-ota.md` |
 | SDV Bazel + Yocto integration details | `docs/sdv-bazel-app.md` |

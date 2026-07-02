@@ -31,9 +31,46 @@ source "$HOST_REQUIREMENTS_LIB"
 DEBIAN_FRONTEND=noninteractive
 PKGS=("${YOCTO_HOST_PACKAGES[@]}")
 
-echo "Installing worker packages required for Yocto builds..."
-$SUDO apt-get update -y
-$SUDO apt-get install -y "${PKGS[@]}"
+# Only run privileged package operations when required.
+missing_pkgs=()
+for pkg in "${PKGS[@]}"; do
+  if ! dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q "install ok installed"; then
+    missing_pkgs+=("$pkg")
+  fi
+done
+
+locale_missing="false"
+if ! has_en_us_utf8_locale; then
+  locale_missing="true"
+fi
+
+bazel_missing="false"
+if ! command -v bazelisk >/dev/null 2>&1 && ! command -v bazel >/dev/null 2>&1; then
+  bazel_missing="true"
+fi
+
+needs_privileged_changes="false"
+if [[ ${#missing_pkgs[@]} -gt 0 || "$locale_missing" == "true" || "$bazel_missing" == "true" ]]; then
+  needs_privileged_changes="true"
+fi
+
+if [[ "$needs_privileged_changes" == "false" ]]; then
+  echo "Host packages, locale, and Bazel/Bazelisk already satisfied; skipping package bootstrap."
+elif [[ -z "$SUDO" && "$EUID" -ne 0 ]]; then
+  echo "ERROR: Package/bootstrap changes need root privileges, but sudo is unavailable."
+  exit 1
+fi
+
+if [[ "$needs_privileged_changes" == "true" && -n "$SUDO" ]]; then
+  echo "Requesting sudo once for required bootstrap changes..."
+  $SUDO -v
+fi
+
+if [[ ${#missing_pkgs[@]} -gt 0 ]]; then
+  echo "Installing worker packages required for Yocto builds..."
+  $SUDO apt-get update -y
+  $SUDO apt-get install -y "${missing_pkgs[@]}"
+fi
 
 ensure_en_us_utf8_locale() {
   if has_en_us_utf8_locale; then
