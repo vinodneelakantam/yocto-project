@@ -28,6 +28,7 @@ Core boundary:
 ## Build Flow
 
 Primary remote flow:
+
 1. Workflow trigger (push or manual dispatch).
 2. Runner preparation (disk cleanup, cache restore, submodule sync).
 3. Containerized Yocto build execution.
@@ -35,9 +36,10 @@ Primary remote flow:
 5. Build summary publication.
 
 Optional local flow:
-1. Run `scripts/local-build.sh`.
-2. Wrapper validates host tools and runs `scripts/remote-build.sh`.
-3. Outputs are staged in `out/`.
+
+1. Run [scripts/local-build.sh](../scripts/local-build.sh).
+2. Wrapper validates host tools and runs [scripts/remote-build.sh](../scripts/remote-build.sh).
+3. Outputs are staged in [out/](../out/).
 
 ## Caching Model
 
