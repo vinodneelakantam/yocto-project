@@ -85,6 +85,21 @@ After success, outputs are staged in:
   - Re-run submodule init/update.
 - Dependency/install errors:
   - Re-run `./scripts/bootstrap-worker-packages.sh`.
+- Bazelisk download warning during bootstrap:
+  - Bootstrap fetches Bazelisk from GitHub Releases and verifies checksum.
+  - Re-run `./scripts/bootstrap-worker-packages.sh` after restoring network access.
+  - If your environment blocks GitHub, install Bazelisk manually in PATH as `bazelisk` (or `bazel`).
+- Locale error `Please make sure locale 'en_US.UTF-8' is available on your system`:
+  - Run `./scripts/bootstrap-worker-packages.sh` (it installs `locales` and generates `en_US.UTF-8`).
+  - If needed, apply manually:
+
+```bash
+sudo apt-get install -y locales
+sudo locale-gen en_US.UTF-8
+sudo update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
+```
+
+  - Open a new shell and re-run the build.
 - Very slow build:
   - Reuse cache directories under `.cache/yocto/` and avoid `clean=true` unless needed.
 

@@ -8,6 +8,7 @@ import datetime as dt
 import html
 import re
 import shutil
+import subprocess
 from pathlib import Path
 from typing import NamedTuple
 
@@ -140,6 +141,134 @@ def normalize_local_path(raw_path: str) -> str | None:
   return path
 
 
+def normalize_repo_relative_path(raw_path: str) -> str | None:
+  path = raw_path.strip().strip("<>").strip("\"'")
+  if not path:
+    return None
+  if path.startswith(("http://", "https://", "#", "mailto:")):
+    return None
+  if " " in path:
+    return None
+  if path.startswith("./"):
+    path = path[2:]
+  if path.startswith("/"):
+    return None
+  return path
+
+
+def repo_path_exists(root: Path, raw_path: str) -> str | None:
+  path = normalize_repo_relative_path(raw_path)
+  if not path:
+    return None
+  candidate = (root / path).resolve()
+  if not file_within_root(candidate, root):
+    return None
+  if not candidate.exists():
+    return None
+  return str(candidate.relative_to(root)).replace("\\", "/")
+
+
+def github_http_repo_url(root: Path) -> str | None:
+  try:
+    origin = subprocess.check_output(
+      ["git", "-C", str(root), "config", "--get", "remote.origin.url"],
+      text=True,
+      stderr=subprocess.DEVNULL,
+    ).strip()
+  except Exception:
+    return None
+
+  if not origin:
+    return None
+  if origin.startswith("git@github.com:"):
+    repo = origin.split(":", 1)[1]
+    if repo.endswith(".git"):
+      repo = repo[:-4]
+    return f"https://github.com/{repo}"
+  if origin.startswith("https://github.com/"):
+    base = origin[:-4] if origin.endswith(".git") else origin
+    return base.rstrip("/")
+  return None
+
+
+def current_git_ref(root: Path) -> str:
+  try:
+    ref = subprocess.check_output(
+      ["git", "-C", str(root), "rev-parse", "--abbrev-ref", "HEAD"],
+      text=True,
+      stderr=subprocess.DEVNULL,
+    ).strip()
+  except Exception:
+    return "main"
+  if not ref or ref == "HEAD":
+    return "main"
+  return ref
+
+
+def to_github_blob_url(github_repo_url: str | None, ref: str, rel_path: str) -> str | None:
+  if not github_repo_url:
+    return None
+  clean_path = rel_path.lstrip("/")
+  return f"{github_repo_url}/blob/{ref}/{clean_path}"
+
+
+def linkify_repo_paths(markdown_text: str, root: Path, github_repo_url: str | None, github_ref: str) -> str:
+  if not github_repo_url:
+    return markdown_text
+
+  def replace_inline_code_path(match: re.Match[str]) -> str:
+    path_text = match.group("path")
+    rel = repo_path_exists(root, path_text)
+    if not rel:
+      return match.group(0)
+    url = to_github_blob_url(github_repo_url, github_ref, rel)
+    if not url:
+      return match.group(0)
+    return f"[`{path_text}`]({url})"
+
+  bullet_path_re = re.compile(
+    r"^(?P<prefix>\s*[-*]\s+)(?P<path>(?:\.?[A-Za-z0-9_./-]+/?))(?P<suffix>:\s.*)$"
+  )
+  linked_lines: list[str] = []
+  in_fenced_code = False
+
+  for line in markdown_text.splitlines():
+    stripped = line.lstrip()
+    if stripped.startswith("```"):
+      in_fenced_code = not in_fenced_code
+      linked_lines.append(line)
+      continue
+
+    if in_fenced_code:
+      linked_lines.append(line)
+      continue
+
+    line = re.sub(
+      r"`(?P<path>(?:\.?[A-Za-z0-9_./-]+(?:\.[A-Za-z0-9_-]+)?/?))`",
+      replace_inline_code_path,
+      line,
+    )
+
+    match = bullet_path_re.match(line)
+    if not match:
+      linked_lines.append(line)
+      continue
+    path_text = match.group("path")
+    rel = repo_path_exists(root, path_text)
+    if not rel:
+      linked_lines.append(line)
+      continue
+    url = to_github_blob_url(github_repo_url, github_ref, rel)
+    if not url:
+      linked_lines.append(line)
+      continue
+    linked_lines.append(
+      f"{match.group('prefix')}[{path_text}]({url}){match.group('suffix')}"
+    )
+
+  return "\n".join(linked_lines)
+
+
 def extract_image_references(markdown_text: str) -> list[ImageRef]:
   refs: list[ImageRef] = []
   seen: set[str] = set()
@@ -205,12 +334,15 @@ def file_within_root(path: Path, root: Path) -> bool:
 
 def render_html(root: Path, docs: list[Path]) -> str:
     now = dt.datetime.now(dt.UTC).strftime("%Y-%m-%d %H:%M UTC")
+    github_repo_url = github_http_repo_url(root)
+    github_ref = current_git_ref(root)
     nav_items: list[str] = []
     sections: list[str] = []
 
     for path in docs:
         rel_path = str(path.relative_to(root))
         source_text = path.read_text(encoding="utf-8")
+        source_text = linkify_repo_paths(source_text, root, github_repo_url, github_ref)
         heading = first_heading(source_text, rel_path)
         anchor = to_anchor_id(rel_path)
         image_refs = extract_image_references(source_text)

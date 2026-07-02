@@ -6,7 +6,7 @@ Detailed docs: https://vinodneelakantam.github.io/yocto-project/
 - `bootstrap-worker-packages.sh`: Installs required Yocto build dependencies on Debian/Ubuntu workers
 - `github/create-repo.sh`: Creates a GitHub repo from this directory and pushes it
 - `github/set-secrets.sh`: Configures required GitHub Actions secrets via `gh`
-- `github/run-workflow-once.sh`: Triggers `remote-yocto-build.yml` once and watches it
+- `github/run-workflow-once.sh`: Triggers `.github/workflows/remote-yocto-build.yml` once and watches it
 - `github/install-gh-from-github.sh`: Downloads `gh` from official GitHub Releases into `.tmp/`, verifies checksum, and installs to `.local/bin/gh`
 - `cloud/aws-spot-build-placeholder.sh`: Placeholder interface for future AWS Spot worker lifecycle automation
 - `build-docs-html.sh`: Builds one consolidated HTML documentation file at `out/docs-html/index.html`
@@ -21,6 +21,8 @@ Detailed docs: https://vinodneelakantam.github.io/yocto-project/
 - Worker package bootstrap can be disabled with `BOOTSTRAP_PACKAGES=false`
 - Worker bootstrap installs `zstd`, which provides `pzstd` required by Yocto HOSTTOOLS
 - Worker bootstrap also installs **Bazelisk** (pinned by `.bazelversion`) for the Bazel-built SDV applications under `apps/` (see `docs/sdv-bazel-app.md`)
+- Worker bootstrap installs `locales` and provisions `en_US.UTF-8`, required by BitBake
+- Bazelisk bootstrap uses checksum verification and retries via `wget`/`curl`; if GitHub is unreachable, Bazel features remain optional for Yocto-only builds
 - To share cache across local, Codespaces, and VPS builds, set `YOCTO_CENTRAL_CACHE_RSYNC=<user>@<host>:/srv/yocto-cache`
 - `scripts/remote-build.sh` will pull and push `downloads` and `sstate-cache` to that central cache endpoint
 

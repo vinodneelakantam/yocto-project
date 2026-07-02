@@ -28,6 +28,7 @@ PKGS=(
   file
   lz4
   zstd
+  locales
 )
 
 REQUIRED_CMDS=(
@@ -49,7 +50,12 @@ REQUIRED_CMDS=(
   lz4c
   zstd
   pzstd
+  locale
 )
+
+has_en_us_utf8_locale() {
+  locale -a 2>/dev/null | tr '[:upper:]' '[:lower:]' | grep -Eq '^en_us\.utf-?8$'
+}
 
 if ! command -v dpkg-query >/dev/null 2>&1; then
   echo "ERROR: dpkg-query is unavailable; cannot validate package installation."
@@ -78,6 +84,13 @@ done
 
 if [[ ${#missing_cmds[@]} -gt 0 ]]; then
   echo "ERROR: Missing expected commands in PATH: ${missing_cmds[*]}"
+  exit 1
+fi
+
+if ! has_en_us_utf8_locale; then
+  echo "ERROR: Missing required locale en_US.UTF-8."
+  echo "Run: ./scripts/bootstrap-worker-packages.sh"
+  echo "Or manually: sudo apt-get install -y locales && sudo locale-gen en_US.UTF-8 && sudo update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8"
   exit 1
 fi
 

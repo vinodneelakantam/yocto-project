@@ -13,6 +13,20 @@ DL_DIR="$CACHE_ROOT/downloads"
 SSTATE_DIR="$CACHE_ROOT/sstate-cache"
 CENTRAL_CACHE_URI="${YOCTO_CENTRAL_CACHE_RSYNC:-}"
 
+has_en_us_utf8_locale() {
+  locale -a 2>/dev/null | tr '[:upper:]' '[:lower:]' | grep -Eq '^en_us\.utf-?8$'
+}
+
+# BitBake validates locale availability and Python filesystem encoding at
+# process startup. Ensure a UTF-8 locale is exported before invoking it.
+if has_en_us_utf8_locale; then
+  export LANG="en_US.UTF-8"
+  export LC_ALL="en_US.UTF-8"
+elif locale -a 2>/dev/null | tr '[:upper:]' '[:lower:]' | grep -q '^c\.utf-8$'; then
+  export LANG="C.UTF-8"
+  export LC_ALL="C.UTF-8"
+fi
+
 sync_cache_dir() {
   local direction="$1"
   local remote_subdir="$2"

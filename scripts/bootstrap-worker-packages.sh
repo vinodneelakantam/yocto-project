@@ -23,6 +23,7 @@ DEBIAN_FRONTEND=noninteractive
 PKGS=(
   gawk
   wget
+  curl
   git
   diffstat
   unzip
@@ -47,11 +48,56 @@ PKGS=(
   file
   lz4
   zstd
+  locales
 )
 
 echo "Installing worker packages required for Yocto builds..."
 $SUDO apt-get update -y
 $SUDO apt-get install -y "${PKGS[@]}"
+
+has_en_us_utf8_locale() {
+  locale -a 2>/dev/null | tr '[:upper:]' '[:lower:]' | grep -Eq '^en_us\.utf-?8$'
+}
+
+ensure_en_us_utf8_locale() {
+  if has_en_us_utf8_locale; then
+    return 0
+  fi
+
+  echo "en_US.UTF-8 locale not found; generating it..."
+  if [[ ! -f /etc/locale.gen ]]; then
+    echo "ERROR: /etc/locale.gen not found; cannot generate locale."
+    echo "Install and configure locales package, then run: sudo locale-gen en_US.UTF-8"
+    exit 1
+  fi
+
+  # Ensure locale-gen input contains en_US.UTF-8.
+  if ! grep -Eq '^[[:space:]]*en_US\.UTF-8[[:space:]]+UTF-8' /etc/locale.gen; then
+    if grep -Eq '^[[:space:]]*#[[:space:]]*en_US\.UTF-8[[:space:]]+UTF-8' /etc/locale.gen; then
+      $SUDO sed -i -E 's/^[[:space:]]*#[[:space:]]*(en_US\.UTF-8[[:space:]]+UTF-8)/\1/' /etc/locale.gen
+    else
+      echo 'en_US.UTF-8 UTF-8' | $SUDO tee -a /etc/locale.gen >/dev/null
+    fi
+  fi
+
+  if command -v locale-gen >/dev/null 2>&1; then
+    $SUDO locale-gen en_US.UTF-8
+  else
+    echo "ERROR: locale-gen command not found after installing locales package."
+    exit 1
+  fi
+
+  if command -v update-locale >/dev/null 2>&1; then
+    $SUDO update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 || true
+  fi
+
+  if ! has_en_us_utf8_locale; then
+    echo "ERROR: Failed to provision en_US.UTF-8 locale."
+    exit 1
+  fi
+}
+
+ensure_en_us_utf8_locale
 
 missing_pkgs=()
 for pkg in "${PKGS[@]}"; do
@@ -71,6 +117,7 @@ fi
 # release, keeping the inner (dev) and outer (Yocto) build loops in sync.
 BAZELISK_VERSION="${BAZELISK_VERSION:-v1.22.1}"
 BAZELISK_INSTALL_PATH="${BAZELISK_INSTALL_PATH:-/usr/local/bin/bazelisk}"
+BAZELISK_REQUIRE_CHECKSUM="${BAZELISK_REQUIRE_CHECKSUM:-false}"
 if command -v bazelisk >/dev/null 2>&1 || command -v bazel >/dev/null 2>&1; then
   echo "Bazel/Bazelisk already present; skipping Bazelisk install."
 else
@@ -88,12 +135,38 @@ else
     echo "Installing Bazelisk ${BAZELISK_VERSION} (${bazelisk_arch}) from ${bazelisk_url}..."
     tmp_bazelisk="$(mktemp)"
     tmp_bazelisk_sha="$(mktemp)"
-    if wget -qO "$tmp_bazelisk" "$bazelisk_url" && wget -qO "$tmp_bazelisk_sha" "$bazelisk_sha_url"; then
-      expected_sha="$(awk '{print $1}' "$tmp_bazelisk_sha")"
-      actual_sha="$(sha256sum "$tmp_bazelisk" | awk '{print $1}')"
-      if [[ "$expected_sha" != "$actual_sha" ]]; then
-        echo "WARNING: Bazelisk checksum mismatch; skipping install."
+
+    download_file() {
+      local url="$1"
+      local output="$2"
+      if command -v wget >/dev/null 2>&1 && wget -q --tries=3 --timeout=20 -O "$output" "$url"; then
+        return 0
+      fi
+      if command -v curl >/dev/null 2>&1 && curl -fsSL --retry 3 --connect-timeout 20 "$url" -o "$output"; then
+        return 0
+      fi
+      return 1
+    }
+
+    if download_file "$bazelisk_url" "$tmp_bazelisk"; then
+      install_bazelisk=true
+      if download_file "$bazelisk_sha_url" "$tmp_bazelisk_sha"; then
+        expected_sha="$(awk '{print $1}' "$tmp_bazelisk_sha")"
+        actual_sha="$(sha256sum "$tmp_bazelisk" | awk '{print $1}')"
+        if [[ "$expected_sha" != "$actual_sha" ]]; then
+          echo "WARNING: Bazelisk checksum mismatch; skipping install."
+          install_bazelisk=false
+        fi
       else
+        if [[ "$BAZELISK_REQUIRE_CHECKSUM" == "true" ]]; then
+          echo "WARNING: Bazelisk checksum file unavailable and BAZELISK_REQUIRE_CHECKSUM=true; skipping install."
+          install_bazelisk=false
+        else
+          echo "WARNING: Bazelisk checksum file unavailable for ${BAZELISK_VERSION}; installing without checksum verification."
+        fi
+      fi
+
+      if [[ "$install_bazelisk" == "true" ]]; then
         $SUDO install -m 0755 "$tmp_bazelisk" "$BAZELISK_INSTALL_PATH"
         # Provide a `bazel` alias so tools that call `bazel` resolve to Bazelisk.
         if ! command -v bazel >/dev/null 2>&1; then
@@ -101,7 +174,7 @@ else
         fi
       fi
     else
-      echo "WARNING: Failed to download Bazelisk or its checksum; SDV Bazel builds will be unavailable until it is installed."
+      echo "WARNING: Failed to download Bazelisk; SDV Bazel builds will be unavailable until it is installed."
     fi
     rm -f "$tmp_bazelisk" "$tmp_bazelisk_sha"
   fi
