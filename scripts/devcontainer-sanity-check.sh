@@ -1,61 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PKGS=(
-  gawk
-  wget
-  git
-  diffstat
-  unzip
-  texinfo
-  gcc
-  build-essential
-  chrpath
-  socat
-  cpio
-  python3
-  python3-pip
-  python3-pexpect
-  xz-utils
-  debianutils
-  iputils-ping
-  python3-git
-  python3-jinja2
-  libegl1
-  libsdl1.2-dev
-  xterm
-  rsync
-  file
-  lz4
-  zstd
-  locales
-)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HOST_REQUIREMENTS_LIB="$SCRIPT_DIR/lib/host-requirements.sh"
 
-REQUIRED_CMDS=(
-  gawk
-  wget
-  git
-  unzip
-  gcc
-  chrpath
-  socat
-  cpio
-  python3
-  pip3
-  xz
-  ping
-  xterm
-  rsync
-  file
-  lz4c
-  zstd
-  pzstd
-  locale
-)
+if [[ ! -f "$HOST_REQUIREMENTS_LIB" ]]; then
+  echo "ERROR: Missing host requirements library: $HOST_REQUIREMENTS_LIB"
+  exit 1
+fi
 
-has_en_us_utf8_locale() {
-  locale -a 2>/dev/null | tr '[:upper:]' '[:lower:]' | grep -Eq '^en_us\.utf-?8$'
-}
+# shellcheck disable=SC1090
+source "$HOST_REQUIREMENTS_LIB"
+
+PKGS=("${YOCTO_HOST_PACKAGES[@]}")
+REQUIRED_CMDS=("${YOCTO_REQUIRED_CMDS[@]}")
 
 if ! command -v dpkg-query >/dev/null 2>&1; then
   echo "ERROR: dpkg-query is unavailable; cannot validate package installation."

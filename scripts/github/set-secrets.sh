@@ -4,6 +4,10 @@ set -euo pipefail
 # Required: GH_REPO (owner/repo), VPS_HOST, VPS_USER, VPS_SSH_KEY
 # Optional: VPS_PORT, VPS_BUILD_ROOT
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1090
+source "$SCRIPT_DIR/lib-gh.sh"
+
 required=(GH_REPO VPS_HOST VPS_USER VPS_SSH_KEY)
 for key in "${required[@]}"; do
   if [[ -z "${!key:-}" ]]; then
@@ -12,24 +16,8 @@ for key in "${required[@]}"; do
   fi
 done
 
-GH_BIN="${GH_BIN:-}"
-if [[ -z "$GH_BIN" ]]; then
-  if command -v gh >/dev/null 2>&1; then
-    GH_BIN="$(command -v gh)"
-  elif [[ -x "./.local/bin/gh" ]]; then
-    GH_BIN="./.local/bin/gh"
-  elif [[ -x "./scripts/github/install-gh-from-github.sh" ]]; then
-    GH_BIN="$(./scripts/github/install-gh-from-github.sh)"
-  else
-    echo "GitHub CLI (gh) is required but not found."
-    exit 1
-  fi
-fi
-
-"$GH_BIN" auth status >/dev/null 2>&1 || {
-  echo "GitHub CLI is not authenticated. Run: gh auth login"
-  exit 1
-}
+GH_BIN="$(require_gh_cli)" || exit 1
+require_gh_auth "$GH_BIN" || exit 1
 
 printf '%s' "$VPS_HOST" | "$GH_BIN" secret set VPS_HOST --repo "$GH_REPO" --body -
 printf '%s' "$VPS_USER" | "$GH_BIN" secret set VPS_USER --repo "$GH_REPO" --body -

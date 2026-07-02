@@ -4,6 +4,7 @@ set -euo pipefail
 IMAGE_TARGET="${1:-core-image-minimal}"
 CLEAN_BUILD="${2:-false}"
 BOOTSTRAP_PACKAGES="${BOOTSTRAP_PACKAGES:-true}"
+BOOTSTRAP_RAN="false"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
@@ -20,6 +21,7 @@ if [[ "$BOOTSTRAP_PACKAGES" == "true" ]]; then
   if [[ -x scripts/bootstrap-worker-packages.sh ]]; then
     echo "[local-build] Installing build dependencies..."
     ./scripts/bootstrap-worker-packages.sh
+    BOOTSTRAP_RAN="true"
   else
     echo "[local-build] bootstrap-worker-packages.sh not found or not executable; skipping package bootstrap."
   fi
@@ -28,7 +30,9 @@ else
 fi
 
 echo "[local-build] Running host-tools sanity check..."
-if [[ -x scripts/devcontainer-sanity-check.sh ]]; then
+if [[ "$BOOTSTRAP_RAN" == "true" ]]; then
+  echo "[local-build] Host-tools sanity check already executed by bootstrap script; skipping duplicate check."
+elif [[ -x scripts/devcontainer-sanity-check.sh ]]; then
   if ! ./scripts/devcontainer-sanity-check.sh; then
     echo "[local-build] ERROR: Host-tools sanity check failed."
     echo "[local-build] Fix by enabling bootstrap (BOOTSTRAP_PACKAGES=true) or installing missing packages manually."
@@ -39,7 +43,7 @@ else
 fi
 
 echo "[local-build] Starting Yocto build..."
-./scripts/remote-build.sh "$IMAGE_TARGET" "$CLEAN_BUILD"
+BOOTSTRAP_PACKAGES=false ./scripts/remote-build.sh "$IMAGE_TARGET" "$CLEAN_BUILD"
 
 echo "[local-build] Build finished."
 

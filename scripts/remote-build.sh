@@ -8,24 +8,23 @@ OUT_DIR="$BUILD_ROOT/out"
 YOCTO_BUILD_DIR="$BUILD_ROOT/build"
 POKY_INIT_SCRIPT="$BUILD_ROOT/sources/poky/oe-init-build-env"
 WORKER_BOOTSTRAP_SCRIPT="$BUILD_ROOT/scripts/bootstrap-worker-packages.sh"
+HOST_REQUIREMENTS_LIB="$BUILD_ROOT/scripts/lib/host-requirements.sh"
 CACHE_ROOT="$BUILD_ROOT/.cache/yocto"
 DL_DIR="$CACHE_ROOT/downloads"
 SSTATE_DIR="$CACHE_ROOT/sstate-cache"
 CENTRAL_CACHE_URI="${YOCTO_CENTRAL_CACHE_RSYNC:-}"
 
-has_en_us_utf8_locale() {
-  locale -a 2>/dev/null | tr '[:upper:]' '[:lower:]' | grep -Eq '^en_us\.utf-?8$'
-}
+if [[ ! -f "$HOST_REQUIREMENTS_LIB" ]]; then
+  echo "Missing host requirements library: $HOST_REQUIREMENTS_LIB"
+  exit 1
+fi
+
+# shellcheck disable=SC1090
+source "$HOST_REQUIREMENTS_LIB"
 
 # BitBake validates locale availability and Python filesystem encoding at
 # process startup. Ensure a UTF-8 locale is exported before invoking it.
-if has_en_us_utf8_locale; then
-  export LANG="en_US.UTF-8"
-  export LC_ALL="en_US.UTF-8"
-elif locale -a 2>/dev/null | tr '[:upper:]' '[:lower:]' | grep -q '^c\.utf-8$'; then
-  export LANG="C.UTF-8"
-  export LC_ALL="C.UTF-8"
-fi
+export_best_utf8_locale || true
 
 sync_cache_dir() {
   local direction="$1"

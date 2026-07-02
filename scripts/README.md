@@ -30,6 +30,13 @@ Detailed docs site: https://vinodneelakantam.github.io/yocto-project/
 | `github/run-workflow-once.sh` | Triggers the Yocto build workflow once and watches run status |
 | `github/install-gh-from-github.sh` | Installs `gh` from official release artifacts with checksum validation |
 
+## Shared Libraries
+
+| Script | Purpose |
+|---|---|
+| `lib/host-requirements.sh` | Single source for host package list, required commands, and UTF-8 locale helpers |
+| `github/lib-gh.sh` | Shared `gh` CLI discovery and authentication checks for GitHub automation scripts |
+
 ## Cloud Placeholder
 
 | Script | Purpose |
@@ -41,7 +48,7 @@ Detailed docs site: https://vinodneelakantam.github.io/yocto-project/
 - Ensure submodules are initialized before running build scripts.
 - `BOOTSTRAP_PACKAGES=false` disables package bootstrap in `local-build.sh`.
 - Set `YOCTO_CENTRAL_CACHE_RSYNC=<user>@<host>:/srv/yocto-cache` to enable
-	shared `downloads` and `sstate-cache` synchronization.
+  shared `downloads` and `sstate-cache` synchronization.
 - `gh` is required for workflow automation and optional cache-seeding behavior.
 
 ## Quick GitHub Setup

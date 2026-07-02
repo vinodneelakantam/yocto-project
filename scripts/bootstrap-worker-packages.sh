@@ -18,46 +18,22 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SANITY_CHECK_SCRIPT="$SCRIPT_DIR/devcontainer-sanity-check.sh"
+HOST_REQUIREMENTS_LIB="$SCRIPT_DIR/lib/host-requirements.sh"
+
+if [[ ! -f "$HOST_REQUIREMENTS_LIB" ]]; then
+  echo "ERROR: Missing host requirements library: $HOST_REQUIREMENTS_LIB"
+  exit 1
+fi
+
+# shellcheck disable=SC1090
+source "$HOST_REQUIREMENTS_LIB"
 
 DEBIAN_FRONTEND=noninteractive
-PKGS=(
-  gawk
-  wget
-  curl
-  git
-  diffstat
-  unzip
-  texinfo
-  gcc
-  build-essential
-  chrpath
-  socat
-  cpio
-  python3
-  python3-pip
-  python3-pexpect
-  xz-utils
-  debianutils
-  iputils-ping
-  python3-git
-  python3-jinja2
-  libegl1
-  libsdl1.2-dev
-  xterm
-  rsync
-  file
-  lz4
-  zstd
-  locales
-)
+PKGS=("${YOCTO_HOST_PACKAGES[@]}")
 
 echo "Installing worker packages required for Yocto builds..."
 $SUDO apt-get update -y
 $SUDO apt-get install -y "${PKGS[@]}"
-
-has_en_us_utf8_locale() {
-  locale -a 2>/dev/null | tr '[:upper:]' '[:lower:]' | grep -Eq '^en_us\.utf-?8$'
-}
 
 ensure_en_us_utf8_locale() {
   if has_en_us_utf8_locale; then

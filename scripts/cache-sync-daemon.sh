@@ -37,6 +37,15 @@ PID_FILE="/tmp/cache-sync-daemon.pid"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+GH_HELPER_LIB="$SCRIPT_DIR/github/lib-gh.sh"
+
+if [[ ! -f "$GH_HELPER_LIB" ]]; then
+  log "ERROR: Missing helper library: $GH_HELPER_LIB"
+  exit 1
+fi
+
+# shellcheck disable=SC1090
+source "$GH_HELPER_LIB"
 
 log() {
   echo "[cache-sync $(date -u '+%H:%M:%S')] $*" | tee -a "$SYNC_LOG"
@@ -44,13 +53,13 @@ log() {
 
 # ── Preflight checks ────────────────────────────────────────────────────────
 
-if ! command -v gh >/dev/null 2>&1; then
-  log "ERROR: gh CLI not found.  Install it or skip daemon startup."
+if ! GH_BIN="$(require_gh_cli)"; then
+  log "ERROR: gh CLI not found. Install it or skip daemon startup."
   exit 1
 fi
 
-if ! gh auth status >/dev/null 2>&1; then
-  log "ERROR: gh CLI not authenticated.  Run 'gh auth login' then restart the daemon."
+if ! require_gh_auth "$GH_BIN" >/dev/null 2>&1; then
+  log "ERROR: gh CLI not authenticated. Run 'gh auth login' then restart the daemon."
   exit 1
 fi
 
@@ -67,8 +76,8 @@ do_sync() {
 
   log "Triggering cache sync (direction=$SYNC_DIRECTION, branch=$branch)..."
 
-  if ! gh workflow run seed-cache-from-codespace.yml \
-      --repo "$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || echo '')" \
+    if ! "$GH_BIN" workflow run seed-cache-from-codespace.yml \
+      --repo "$("$GH_BIN" repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || echo '')" \
       --ref "$branch" \
       -f image="$SYNC_IMAGE" \
       -f direction="$SYNC_DIRECTION" 2>&1 | tee -a "$SYNC_LOG"; then
@@ -79,7 +88,7 @@ do_sync() {
   # Wait a few seconds for the run to register in the API.
   sleep 5
   local run_id
-  run_id="$(gh run list \
+  run_id="$("$GH_BIN" run list \
     --workflow=seed-cache-from-codespace.yml \
     --branch "$branch" \
     --limit 1 \
@@ -92,7 +101,7 @@ do_sync() {
   fi
 
   log "Waiting for run #${run_id} to complete..."
-  if gh run watch "$run_id" --exit-status 2>&1 | tee -a "$SYNC_LOG"; then
+  if "$GH_BIN" run watch "$run_id" --exit-status 2>&1 | tee -a "$SYNC_LOG"; then
     log "Sync run #${run_id} completed successfully."
   else
     log "WARNING: Sync run #${run_id} failed — check the Actions tab for details."
