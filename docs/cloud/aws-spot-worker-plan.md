@@ -1,32 +1,49 @@
-# AWS Spot Worker Plan (Placeholder)
+# AWS Spot Worker Plan
 
 ## Status
 
-Planned placeholder for cloud worker automation. Current production path remains VPS-backed remote build.
+Current production backend is VPS-based. AWS Spot worker automation is planned
+and not yet implemented end-to-end.
 
-## Goal
+## Objective
 
-Use AWS Spot instances as cost-optimized ephemeral build workers while GitHub Actions remains the frontend for logs and artifacts.
+Run Yocto builds on ephemeral AWS Spot workers while preserving the existing
+GitHub workflow interface, logs, and artifact behavior.
 
-## Intended Flow
+## Target Contract
 
-1. GitHub Actions requests a Spot worker.
-2. Worker bootstraps required packages and source checkout.
-3. Worker runs scripts/remote-build.sh.
-4. Artifacts are copied back and published in GitHub Actions.
-5. Worker is terminated.
+From GitHub workflow perspective, cloud backend must preserve:
+- same input shape (`image`, `clean`, backend selector),
+- same output paths (`out/`, `out/build-summary.txt`),
+- same failure visibility and artifact publication behavior.
 
-## Required Future Work
+## Planned Execution Flow
 
-- IAM policy and least-privilege credentials model.
-- Spot request and interruption handling.
-- Cache persistence for downloads/sstate across workers.
-- Optional fallback to VPS or on-demand instance.
+1. Workflow requests Spot capacity from approved instance pools.
+2. Worker is provisioned with baseline dependencies and repository checkout.
+3. Worker executes `scripts/remote-build.sh`.
+4. Outputs are uploaded back through the workflow.
+5. Worker is terminated on success and on failure paths.
 
-## Inputs To Standardize
+## Milestones
 
-- AMI/OS image
-- Instance type list
-- VPC/subnet/security group
-- SSH strategy or SSM strategy
-- Cache bucket/storage location
+1. Define backend abstraction and interface contract.
+2. Implement Spot provisioning and teardown path.
+3. Add interruption handling and fallback policy.
+4. Add cache persistence strategy for `downloads` and `sstate-cache`.
+5. Validate parity against VPS backend on at least one stable image target.
+
+## Required Decisions
+
+- IAM model (least privilege, short-lived credentials).
+- Access path (SSH vs SSM).
+- Network boundary (VPC/subnets/security groups).
+- Cache storage backend and retention policy.
+- Fallback behavior when Spot capacity is unavailable.
+
+## Exit Criteria
+
+- Successful build run from GitHub using spot backend.
+- Verified teardown on cancellation and failure.
+- Artifact parity with VPS flow.
+- Documented operational runbook for interruption and fallback.

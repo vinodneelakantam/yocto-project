@@ -1,51 +1,57 @@
 # Scripts
 
-Detailed docs: https://vinodneelakantam.github.io/yocto-project/
+Script index for build, setup, and automation helpers in this repository.
 
-- `remote-build.sh`: Runs BitBake on remote compute and stages outputs in `out/`
-- `bootstrap-worker-packages.sh`: Installs required Yocto build dependencies on Debian/Ubuntu workers
-- `github/create-repo.sh`: Creates a GitHub repo from this directory and pushes it
-- `github/set-secrets.sh`: Configures required GitHub Actions secrets via `gh`
-- `github/run-workflow-once.sh`: Triggers `.github/workflows/remote-yocto-build.yml` once and watches it
-- `github/install-gh-from-github.sh`: Downloads `gh` from official GitHub Releases into `.tmp/`, verifies checksum, and installs to `.local/bin/gh`
-- `cloud/aws-spot-build-placeholder.sh`: Placeholder interface for future AWS Spot worker lifecycle automation
-- `build-docs-html.sh`: Builds one consolidated HTML documentation file at `out/docs-html/index.html`
-- `render-docs-html.py`: Internal Markdown-to-HTML renderer used by local and CI docs build
+Detailed docs site: https://vinodneelakantam.github.io/yocto-project/
 
-## Notes
+## Core Build Scripts
 
-- Script expects `sources/poky/oe-init-build-env` on VPS
-- Ensure submodules are initialized before running remote builds
-- Use GitHub Actions workflow to call this script over SSH
-- If `gh` is not installed system-wide, scripts auto-bootstrap it from GitHub release packages
-- Worker package bootstrap can be disabled with `BOOTSTRAP_PACKAGES=false`
-- Worker bootstrap installs `zstd`, which provides `pzstd` required by Yocto HOSTTOOLS
-- Worker bootstrap also installs **Bazelisk** (pinned by `.bazelversion`) for the Bazel-built SDV applications under `apps/` (see `docs/sdv-bazel-app.md`)
-- Worker bootstrap installs `locales` and provisions `en_US.UTF-8`, required by BitBake
-- Bazelisk bootstrap uses checksum verification and retries via `wget`/`curl`; if GitHub is unreachable, Bazel features remain optional for Yocto-only builds
-- To share cache across local, Codespaces, and VPS builds, set `YOCTO_CENTRAL_CACHE_RSYNC=<user>@<host>:/srv/yocto-cache`
-- `scripts/remote-build.sh` will pull and push `downloads` and `sstate-cache` to that central cache endpoint
+| Script | Purpose | Typical Use |
+|---|---|---|
+| `local-build.sh` | Local build wrapper with dependency checks/bootstrap and optional cache seed | Developer local build entrypoint |
+| `remote-build.sh` | Core Yocto build contract, cache sync, and output staging | Called by workflows and local wrapper |
+| `bootstrap-worker-packages.sh` | Installs host packages required for Yocto and Bazel flows | New machine preparation |
+| `devcontainer-sanity-check.sh` | Validates required host tools before build | Early failure detection |
+| `cache-sync-daemon.sh` | Long-running cache sync helper for shared caches | Optional advanced setup |
 
-## GitHub Setup Automation
+## Documentation Scripts
 
-Export values, then run:
+| Script | Purpose |
+|---|---|
+| `build-docs-html.sh` | Builds consolidated docs HTML artifact |
+| `render-docs-html.py` | Internal markdown-to-HTML renderer |
+
+## GitHub Automation Scripts
+
+| Script | Purpose |
+|---|---|
+| `github/create-repo.sh` | Creates and initializes a GitHub repository |
+| `github/set-secrets.sh` | Pushes required secrets to GitHub Actions |
+| `github/run-workflow-once.sh` | Triggers the Yocto build workflow once and watches run status |
+| `github/install-gh-from-github.sh` | Installs `gh` from official release artifacts with checksum validation |
+
+## Cloud Placeholder
+
+| Script | Purpose |
+|---|---|
+| `cloud/aws-spot-build-placeholder.sh` | Placeholder interface for future AWS Spot worker lifecycle |
+
+## Operational Notes
+
+- Ensure submodules are initialized before running build scripts.
+- `BOOTSTRAP_PACKAGES=false` disables package bootstrap in `local-build.sh`.
+- Set `YOCTO_CENTRAL_CACHE_RSYNC=<user>@<host>:/srv/yocto-cache` to enable
+	shared `downloads` and `sstate-cache` synchronization.
+- `gh` is required for workflow automation and optional cache-seeding behavior.
+
+## Quick GitHub Setup
 
 ```bash
 export GH_REPO="owner/repo"
 export VPS_HOST="your.vps.host"
 export VPS_USER="yocto-ci"
 export VPS_SSH_KEY="$(cat ~/.ssh/id_ed25519)"
-export VPS_PORT="22"                 # optional
-export VPS_BUILD_ROOT="~/yocto-project" # optional
 
 ./scripts/github/set-secrets.sh
 ./scripts/github/run-workflow-once.sh
-```
-
-If you do not have a repo yet:
-
-```bash
-export GH_REPO_NAME="yocto-project"
-export GH_VISIBILITY="public"
-./scripts/github/create-repo.sh
 ```

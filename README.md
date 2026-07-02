@@ -1,36 +1,17 @@
-# Yocto GitHub-Centric Build Project
+# Yocto Build Control Repository
 
-GitHub-first Yocto build orchestration with a reproducible container build
-environment and an SDV app workflow.
+This repository is the control plane for a Yocto-based build platform.
 
-## Detailed Docs (GitHub Pages)
+What it does now:
+- Builds Yocto images using GitHub Actions and containerized build tooling.
+- Maintains project-specific Yocto layers and config templates.
+- Hosts an SDV sample application built with Bazel and packaged through Yocto.
+- Publishes build artifacts and documentation from CI.
 
-- Main docs site: https://vinodneelakantam.github.io/yocto-project/
-- Fork/template pattern: https://<owner>.github.io/<repo>/
-- Preserved deep-dive content moved from root README: `docs/repository-deep-dive.md`
-
-Use this README as a quick index. Full architecture and operational guidance is
-in GitHub Pages.
-
-## Repository Scope
-
-- `apps/`: Bazel-built SDV app
-- `layers/`: Project Yocto layers
-- `sources/`: Pinned upstream submodules (`poky`, `meta-openembedded`)
-- `conf/`: Example Yocto config templates
-- `scripts/`: Build and GitHub automation scripts
-- `docs/`: Source markdown for the published documentation site
-
-## Core Workflows
-
-| Workflow | File | Purpose |
-|---|---|---|
-| Yocto Build | `.github/workflows/remote-yocto-build.yml` | Main Yocto image build path. |
-| Publish Yocto Build Image | `.github/workflows/publish-build-image.yml` | Rebuilds and publishes GHCR build image. |
-| Bazel SDV App | `.github/workflows/bazel-sdv-app.yml` | Fast C/C++/Python app build and test. |
-| Docs HTML | `.github/workflows/docs-html.yml` | Builds docs HTML artifact. |
-| Docs Pages Deploy | `.github/workflows/docs-pages.yml` | Publishes docs to GitHub Pages. |
-| Build Health Dashboard | `.github/workflows/build-health-dashboard.yml` | CI health summary in Actions job summary. |
+What it is moving toward:
+- Multi-backend worker execution (GitHub-hosted, Codespace, and cloud spot workers).
+- Stronger supply-chain controls (signing, verification, release promotion rules).
+- OTA-ready release lifecycle with rollback safety.
 
 ## Quick Start
 
@@ -41,25 +22,43 @@ git clone --recurse-submodules https://github.com/<owner>/<repo>.git
 cd <repo>
 ```
 
-2. Build docs locally.
+2. Run a local Yocto build.
 
 ```bash
-./scripts/build-docs-html.sh
+./scripts/local-build.sh core-image-minimal false
 ```
 
-3. Run SDV app tests.
+3. Build and test the SDV app.
 
 ```bash
 bazel test //apps/sdv-vehicle-service/...
 ```
 
-4. Trigger Yocto build from Actions (push to `main` or manual dispatch).
+## Documentation Map
 
-## Important Links
+| If you need... | Read |
+|---|---|
+| Current architecture and roadmap boundaries | `docs/architecture.md` |
+| Day-1 contributor setup | `docs/onboarding-checklist.md` |
+| Local build operation and troubleshooting | `docs/local-build.md` |
+| Repository standards and change rules | `docs/repo-conventions.md` |
+| Security and OTA posture (current vs planned) | `docs/security-and-ota.md` |
+| SDV Bazel + Yocto integration details | `docs/sdv-bazel-app.md` |
+| Visual diagrams and pipeline flow | `docs/diagram-gallery.md` |
 
-- Diagram gallery: `docs/diagram-gallery.md`
-- Repository deep-dive (migrated content): `docs/repository-deep-dive.md`
-- Local build notes: `docs/local-build.md`
-- Architecture: `docs/architecture.md`
-- Security and OTA: `docs/security-and-ota.md`
-- SDV Bazel integration: `docs/sdv-bazel-app.md`
+Published docs site: https://vinodneelakantam.github.io/yocto-project/
+
+## Repository Scope
+
+- `apps/`: Bazel-built SDV services and tests
+- `layers/`: Yocto layers owned by this project
+- `sources/`: pinned upstream submodules (`poky`, `meta-openembedded`)
+- `conf/`: example `local.conf` and `bblayers.conf` templates
+- `scripts/`: local/CI build and automation helpers
+- `docs/`: project documentation source
+
+## Non-Goals
+
+- This repository is not a fork or mirror of upstream Yocto trees.
+- This repository does not store private signing keys.
+- This repository does not require always-on self-hosted infrastructure.

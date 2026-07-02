@@ -1,56 +1,62 @@
 # Contributor Onboarding Checklist
 
-## Access And Tooling
+Use this checklist for first access and first successful build. Operational
+command details live in `docs/local-build.md`.
+
+## 1. Clone And Validate Sources
 
 - Clone with submodules:
-  - git clone --recurse-submodules <repo-url>
-- Ensure required tools:
-  - git, bash, rsync, ssh
-- Optional GitHub CLI tools:
-  - gh auth login
 
-## First-Time Repository Validation
+```bash
+git clone --recurse-submodules <repo-url>
+cd <repo>
+```
 
-- Validate submodules:
-  - git submodule update --init --recursive
+- Verify submodule content:
+
+```bash
+git submodule update --init --recursive
+```
+
 - Confirm required paths exist:
-  - sources/poky/oe-init-build-env
-  - sources/meta-openembedded
+  - `sources/poky/oe-init-build-env`
+  - `sources/meta-openembedded`
 
-## Remote Build Configuration
+## 2. Prepare Tooling
 
-Set repository secrets (minimum):
+- Required: `git`, `bash`, `ssh`, `rsync`
+- Optional but recommended: `gh` (`gh auth login`)
 
-- VPS_HOST
-- VPS_USER
-- VPS_SSH_KEY
+## 3. Configure CI Secrets (Remote Build)
+
+Minimum repository secrets:
+- `VPS_HOST`
+- `VPS_USER`
+- `VPS_SSH_KEY`
 
 Optional:
+- `VPS_PORT`
+- `VPS_BUILD_ROOT`
 
-- VPS_PORT
-- VPS_BUILD_ROOT
+## 4. Run First Build
 
-## Trigger First Build
+Choose one path:
+- Local: run `./scripts/local-build.sh core-image-minimal false`
+- CI: trigger Remote Yocto Build workflow (push to main or manual dispatch)
 
-- Push to main, or
-- Use GitHub Actions manual trigger for Remote Yocto Build.
+Recommended first CI inputs:
+- `image=core-image-minimal`
+- `clean=false`
+- `backend=vps`
 
-Recommended initial inputs:
+## 5. Verify Evidence
 
-- image: core-image-minimal
-- clean: false
-- backend: vps
+- Workflow summary shows image, backend, and revision.
+- Build artifact is present.
+- `out/build-summary.txt` reports successful task completion.
 
-## Validate Build Evidence
+## 6. Recovery Shortlist
 
-In GitHub Actions run page:
-
-- Confirm workflow summary includes image, backend, and revision.
-- Confirm artifact exists: yocto-images-<run_number>.
-- Download artifact and review out/build-summary.txt.
-
-## Common Recovery Steps
-
-- Missing submodules: run recursive submodule init/update.
-- SSH failures: re-check VPS_* secrets and key permissions.
-- Missing artifacts: inspect remote-build.sh logs and build summary.
+- Missing submodules: rerun recursive submodule initialization.
+- SSH failure: recheck `VPS_*` secrets and key validity.
+- Missing artifact: inspect workflow logs around build and upload steps.
