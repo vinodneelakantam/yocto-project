@@ -102,3 +102,21 @@ bazel run   //apps/sdv-vehicle-service:sdv-vehicle-service -- --once
 
 To cross-compile and package it into a Yocto image, see
 `docs/sdv-bazel-app.md` and the `layers/meta-sdv` recipe.
+
+## 7) Build Consolidated HTML Documentation
+
+Generate one HTML file that aggregates repository Markdown documentation:
+
+```bash
+./scripts/build-docs-html.sh
+```
+
+Output path:
+
+- `out/docs-html/index.html`
+
+Optional custom output path:
+
+```bash
+./scripts/build-docs-html.sh out/docs-html/my-docs.html
+```

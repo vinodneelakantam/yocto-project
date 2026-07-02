@@ -31,6 +31,10 @@ See the visual block diagrams:
 | Remote CI pipeline (step-by-step) | `docs/diagrams/ci-remote-pipeline.png` | `docs/diagrams/ci-remote-pipeline.dot` |
 | GHCR image lifecycle | `docs/diagrams/ghcr-image-lifecycle.png` | `docs/diagrams/ghcr-image-lifecycle.dot` |
 | Cache strategy (three tiers) | `docs/diagrams/cache-layers.png` | `docs/diagrams/cache-layers.dot` |
+| Repository collaboration (v3) | `docs/diagrams/repo-collaboration-block-diagram-v3.png` | `docs/diagrams/repo-collaboration-block-diagram-v3.dot` |
+
+For inline previews and explanations of all diagrams, see
+`docs/diagram-gallery.md`.
 
 ## Repository Layout
 
@@ -74,6 +78,8 @@ mirror of upstream Yocto source trees.
 | **Yocto Build** | `.github/workflows/remote-yocto-build.yml` | Primary image build. Ensures the GHCR image exists, then runs BitBake. Includes an opt-in Codespace job. |
 | **Publish Yocto Build Image** | `.github/workflows/publish-build-image.yml` | Builds and pushes `ghcr.io/<owner>/yocto-build-env` from `.devcontainer/Dockerfile`. |
 | **Bazel SDV App** | `.github/workflows/bazel-sdv-app.yml` | Fast inner-loop CI: builds and tests the `apps/` C/C++/Python code natively (no Yocto). |
+| **Docs HTML** | `.github/workflows/docs-html.yml` | Builds a single consolidated HTML documentation bundle and uploads it as `docs-html` artifact. |
+| **Docs Pages Deploy** | `.github/workflows/docs-pages.yml` | Builds the consolidated docs HTML and deploys it to GitHub Pages from Actions. |
 | **Sync Yocto Cache** | `.github/workflows/seed-cache-from-codespace.yml` | Bidirectional cache sync between a Codespace and the GitHub Actions cache. |
 | **Build Health Dashboard** | `.github/workflows/build-health-dashboard.yml` | Observability: renders a build-health dashboard (last status, success rate, average duration and recent trend per workflow) into the run's Job Summary using only the native Actions REST API. Runs daily and on demand. |
 
@@ -247,6 +253,26 @@ Or trigger once by CLI:
 export GH_REPO="owner/repo"
 ./scripts/github/run-workflow-once.sh
 ```
+
+### Consolidated HTML docs output
+
+Build a single-file HTML view of repository docs locally:
+
+```bash
+./scripts/build-docs-html.sh
+```
+
+Output path:
+
+- `out/docs-html/index.html`
+
+In CI, the **Docs HTML** workflow runs on docs changes (or manually) and
+uploads the same output folder as the `docs-html` artifact.
+
+The **Docs Pages Deploy** workflow publishes the same output to GitHub Pages.
+After the first successful deployment, the site URL is:
+
+- `https://<owner>.github.io/<repo>/`
 
 7. Build and test the SDV app locally (no Yocto required):
 

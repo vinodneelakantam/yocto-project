@@ -15,6 +15,10 @@ For visual summaries, see:
 | Remote CI pipeline (step-by-step) | `docs/diagrams/ci-remote-pipeline.png` | `docs/diagrams/ci-remote-pipeline.dot` |
 | GHCR image lifecycle | `docs/diagrams/ghcr-image-lifecycle.png` | `docs/diagrams/ghcr-image-lifecycle.dot` |
 | Cache strategy (three tiers) | `docs/diagrams/cache-layers.png` | `docs/diagrams/cache-layers.dot` |
+| Repository collaboration (v3) | `docs/diagrams/repo-collaboration-block-diagram-v3.png` | `docs/diagrams/repo-collaboration-block-diagram-v3.dot` |
+
+For inline previews and explanations of all diagrams, see
+`docs/diagram-gallery.md`.
 
 ## Model
 

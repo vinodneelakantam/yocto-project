@@ -7,6 +7,8 @@
 - `github/run-workflow-once.sh`: Triggers `remote-yocto-build.yml` once and watches it
 - `github/install-gh-from-github.sh`: Downloads `gh` from official GitHub Releases into `.tmp/`, verifies checksum, and installs to `.local/bin/gh`
 - `cloud/aws-spot-build-placeholder.sh`: Placeholder interface for future AWS Spot worker lifecycle automation
+- `build-docs-html.sh`: Builds one consolidated HTML documentation file at `out/docs-html/index.html`
+- `render-docs-html.py`: Internal Markdown-to-HTML renderer used by local and CI docs build
 
 ## Notes
 
