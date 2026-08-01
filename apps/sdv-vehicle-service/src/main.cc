@@ -9,7 +9,7 @@
 #include <iostream>
 #include <thread>
 
-#include "src/signal_store.h"
+#include "signal_store.h"
 
 namespace {
 

@@ -7,8 +7,11 @@ integration in this repository.
 It is intentionally dependency-light (native Bazel `cc_*` rules + Python
 standard library) so it builds with no external fetches — which keeps it
 reproducible inside Yocto where the network is disabled during the build. The
-same Bazel structure scales up to a large C++ codebase (e.g. Baidu Apollo)
-later; see `docs/sdv-bazel-app.md`.
+signal-store model is shared (not forked) with the sibling
+[sdv-diagnostics-service](../sdv-diagnostics-service) through
+`//libs/vss-common`. The same Bazel structure scales up to a large C++
+codebase (e.g. Baidu Apollo) later; see `docs/sdv-bazel-app.md` and
+`docs/bazel-build-system.md`.
 
 Detailed docs: https://vinodneelakantam.github.io/yocto-project/
 
@@ -17,10 +20,11 @@ Detailed docs: https://vinodneelakantam.github.io/yocto-project/
 | Target | Language | Purpose |
 |---|---|---|
 | `//apps/sdv-vehicle-service:sdv-vehicle-service` | C++ | Service binary; seeds and prints VSS-style signals |
-| `//apps/sdv-vehicle-service:signal_store` | C++ | In-memory VSS signal store library |
-| `//apps/sdv-vehicle-service:signal_store_test` | C++ | Unit tests for the store |
 | `//apps/sdv-vehicle-service:vehicle-cli` | Python | CLI to list/get VSS signals |
 | `//apps/sdv-vehicle-service:vehicle_cli_test` | Python | Unit tests for the CLI |
+| `//libs/vss-common:signal_store` | C++ | Shared in-memory VSS signal store library (reused by both apps) |
+| `//libs/vss-common:signal_store_test` | C++ | Unit tests for the store |
+
 
 ## Inner loop (developer / devcontainer)
 

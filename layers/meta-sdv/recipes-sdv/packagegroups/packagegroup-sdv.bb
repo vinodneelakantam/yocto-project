@@ -7,4 +7,5 @@ inherit packagegroup
 
 RDEPENDS:${PN} = " \
     sdv-vehicle-service \
+    sdv-diagnostics-service \
 "

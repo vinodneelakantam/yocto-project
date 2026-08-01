@@ -57,6 +57,10 @@ CI builds all three in one pass via the opt-in `variant-matrix-build` job in
 (manual dispatch with `build_all_variants: true`); pushes to `main` keep
 building the single default image to preserve the fast inner loop.
 
+The SDV Bazel applications mirror this same debug/release/secure axis at the
+Bazel level (`--config=debug|release|secure`) — see
+[docs/bazel-build-system.md#variant-management](bazel-build-system.md#variant-management).
+
 ## Build Flow
 
 Primary remote flow:
@@ -82,6 +86,10 @@ The platform currently uses three cache layers:
 
 Optional central rsync cache can be enabled for local/Codespace reuse through
 `YOCTO_CENTRAL_CACHE_RSYNC`.
+
+The SDV Bazel applications add their own cache tiers on top of this (disk,
+repository, CI, self-hosted remote cache, and opt-in cloud remote execution)
+— see [docs/bazel-build-system.md#caching-tiers](bazel-build-system.md#caching-tiers).
 
 ## Risks And Failure Domains
 

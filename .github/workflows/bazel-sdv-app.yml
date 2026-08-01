@@ -10,6 +10,8 @@ on:
     branches: ["main"]
     paths:
       - "apps/**"
+      - "libs/**"
+      - "tools/**"
       - "MODULE.bazel"
       - ".bazelrc"
       - ".bazelversion"
@@ -18,6 +20,8 @@ on:
   pull_request:
     paths:
       - "apps/**"
+      - "libs/**"
+      - "tools/**"
       - "MODULE.bazel"
       - ".bazelrc"
       - ".bazelversion"
@@ -36,11 +40,28 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # Bazel-level build variants, mirroring the Yocto DISTRO variants
+        # (portfolio-debug / -release / -secure). See tools/variants and
+        # docs/bazel-build-system.md#variant-management.
+        variant: [debug, release, secure]
+    # Self-hosted remote cache for this job, demonstrating the same gRPC
+    # cache protocol used by scripts/bazel-remote-cache.sh locally. See
+    # docs/bazel-build-system.md#remote-cache.
+    services:
+      bazel-remote:
+        image: buchgr/bazel-remote-cache:v2.4.3
+        ports:
+          - 9092:9092
+          - 9090:9090
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: false
+          fetch-depth: 0
 
       - name: Init SDV app submodule (if configured)
         run: |
@@ -58,8 +79,9 @@ jobs:
             ~/.cache/bazel-disk
             ~/.cache/bazel-repo
             ~/.cache/bazelisk
-          key: bazel-${{ runner.os }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'apps/**/BUILD.bazel') }}
+          key: bazel-${{ runner.os }}-${{ matrix.variant }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', '**/BUILD.bazel') }}
           restore-keys: |
+            bazel-${{ runner.os }}-${{ matrix.variant }}-
             bazel-${{ runner.os }}-
 
       # Detect whether the apps/ directory contains any Bazel BUILD files.
@@ -82,11 +104,23 @@ jobs:
           fi
 
       # Bazelisk ships preinstalled on ubuntu-latest runners and honours
-      # .bazelversion to fetch the pinned Bazel release.
-      - name: Build SDV application
+      # .bazelversion to fetch the pinned Bazel release. `//...` covers
+      # apps/, libs/, and tools/ (build/ and other Yocto trees are excluded
+      # via .bazelignore).
+      - name: Build SDV application (${{ matrix.variant }})
         if: steps.check_targets.outputs.has_targets == 'true'
-        run: bazelisk build --config=ci //apps/...
+        run: bazelisk build --config=ci --config=remote-cache --config=${{ matrix.variant }} //...
 
-      - name: Test SDV application
+      - name: Test SDV application (${{ matrix.variant }})
         if: steps.check_targets.outputs.has_targets == 'true'
-        run: bazelisk test --config=ci //apps/...
+        run: bazelisk test --config=ci --config=remote-cache --config=${{ matrix.variant }} //...
+
+      # Informational only: shows the "independent builds" payoff of a
+      # cleanly partitioned Bazel graph — only targets that depend on what
+      # changed need rebuilding. Non-blocking (change-impact preview, not a
+      # gate). See docs/bazel-build-system.md#independent-builds.
+      - name: Show affected Bazel targets (informational)
+        if: github.event_name == 'pull_request' && matrix.variant == 'release'
+        run: |
+          git fetch origin "${{ github.base_ref }}" --depth=1
+          bash scripts/bazel-affected-targets.sh "origin/${{ github.base_ref }}" || true

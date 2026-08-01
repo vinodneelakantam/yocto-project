@@ -18,3 +18,8 @@ sources/*
 # Python cache
 __pycache__/
 *.pyc
+
+# Bazel
+/bazel-*
+user.bazelrc
+.bazelrc.local

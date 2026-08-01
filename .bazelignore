@@ -6,6 +6,7 @@ conf
 docs
 scripts
 out
+build
 .cache
 .devcontainer
 .github

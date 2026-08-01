@@ -4,32 +4,21 @@
 # the Yocto recipe in layers/meta-sdv.  Kept intentionally dependency-light so
 # the C++ targets build with Bazel's native cc rules and need no network
 # fetches inside Yocto (BB_NO_NETWORK friendly).
+#
+# This is one of two independently-built services (see also
+# //apps/sdv-diagnostics-service) that both reuse //libs/vss-common — see
+# docs/bazel-build-system.md for the build-graph-partitioning rationale.
 
-load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
+load("@rules_cc//cc:defs.bzl", "cc_binary")
 load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
 
 package(default_visibility = ["//visibility:public"])
-
-# ── C++ core: an in-memory vehicle-signal store (VSS-style paths) ──────────
-cc_library(
-    name = "signal_store",
-    srcs = ["src/signal_store.cc"],
-    hdrs = ["src/signal_store.h"],
-    strip_include_prefix = "/apps/sdv-vehicle-service",
-)
-
-cc_test(
-    name = "signal_store_test",
-    size = "small",
-    srcs = ["test/signal_store_test.cc"],
-    deps = [":signal_store"],
-)
 
 # ── C++ service binary ────────────────────────────────────────────────────
 cc_binary(
     name = "sdv-vehicle-service",
     srcs = ["src/main.cc"],
-    deps = [":signal_store"],
+    deps = ["//libs/vss-common:signal_store"],
 )
 
 # ── Python CLI tool that talks to the same VSS-style signal paths ──────────

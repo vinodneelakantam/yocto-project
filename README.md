@@ -28,10 +28,11 @@ cd <repo>
 ./scripts/local-build.sh core-image-minimal false
 ```
 
-3. Build and test the SDV app.
+3. Build and test the SDV apps (all variants share one Bazel graph):
 
 ```bash
-bazel test //apps/sdv-vehicle-service/...
+bazel test //...
+bazel test --config=secure //...
 ```
 
 ## Documentation Map
@@ -49,6 +50,7 @@ bazel test //apps/sdv-vehicle-service/...
 | SBOM generation and CVE triage pipeline | `docs/sbom-and-cve-workflow.md` |
 | Prioritized roadmap to close resume/portfolio gaps | `docs/resume-gap-roadmap.md` |
 | SDV Bazel + Yocto integration details | `docs/sdv-bazel-app.md` |
+| Bazel as a build-system backbone (variants, remote cache, RBE, partitioning) | `docs/bazel-build-system.md` |
 | Visual diagrams and pipeline flow | `docs/diagram-gallery.md` |
 
 Published docs site: https://vinodneelakantam.github.io/yocto-project/
@@ -56,6 +58,8 @@ Published docs site: https://vinodneelakantam.github.io/yocto-project/
 ## Repository Scope
 
 - `apps/`: Bazel-built SDV services and tests
+- `libs/`: shared Bazel libraries reused across `apps/`
+- `tools/`: Bazel build-setting/tooling packages (e.g. variant management)
 - `layers/`: Yocto layers owned by this project
 - `sources/`: pinned upstream submodules (`poky`, `meta-openembedded`)
 - `conf/`: example `local.conf` and `bblayers.conf` templates

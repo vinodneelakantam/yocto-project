@@ -27,3 +27,18 @@ python.toolchain(
     is_default = True,
     python_version = "3.12",
 )
+
+# Build-setting primitives (string_flag) used for Bazel-level variant
+# management — see tools/variants and docs/bazel-build-system.md.
+bazel_dep(name = "bazel_skylib", version = "1.7.1")
+
+# BuildBuddy RBE toolchain/platform definitions. Inert unless a build opts in
+# with `--config=remote-exec` (see .bazelrc); harmless for every other build.
+# Activate by copying buildbuddy.bazelrc.example to user.bazelrc with a real
+# API key. See docs/bazel-build-system.md#remote-execution.
+bazel_dep(name = "toolchains_buildbuddy", version = "0.0.4")
+
+buildbuddy = use_extension("@toolchains_buildbuddy//:extensions.bzl", "buildbuddy")
+register_toolchains(
+    "@toolchains_buildbuddy//toolchains/cc:ubuntu_gcc_x86_64",
+)

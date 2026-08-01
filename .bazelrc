@@ -29,17 +29,54 @@ build:ci --noshow_progress
 build:ci --keep_going
 test:ci --keep_going
 
-# ── Remote cache (4th cache tier — opt-in) ────────────────────────────────
+# ── Build variants (debug / release / secure) ─────────────────────────────
+# Bazel-level equivalent of the Yocto DISTRO variants in
+# layers/meta-portfolio/conf/distro/ (portfolio-debug / -release / -secure).
+# Sets the //tools/variants:build_variant build setting consumed by select()
+# in libs/vss-common and friends, plus the matching compilation_mode/strip
+# behaviour. See docs/bazel-build-system.md#variant-management.
+build:debug --//tools/variants:build_variant=debug
+build:debug --compilation_mode=dbg
+build:debug --strip=never
+
+build:release --//tools/variants:build_variant=release
+build:release --compilation_mode=opt
+build:release --strip=always
+
+build:secure --//tools/variants:build_variant=secure
+build:secure --compilation_mode=opt
+build:secure --strip=always
+
+# ── Remote cache (4th cache tier, self-hosted) ────────────────────────────
 # This mirrors the repository's existing three-tier Yocto cache philosophy
 # (docker layers, downloads, sstate) by adding a Bazel remote cache tier.
-# Disabled by default; enable with `--config=remote-cache` once a cache
-# endpoint (bazel-remote, BuildBuddy, etc.) is provisioned.
-#
-# build:remote-cache --remote_cache=grpc://your-cache-host:9092
-# build:remote-cache --remote_upload_local_results=true
+# Disabled by default; enable with `--config=remote-cache` after starting the
+# local cache: `scripts/bazel-remote-cache.sh up` (see
+# infra/bazel-remote/docker-compose.yml). CI runs an equivalent service
+# container — see .github/workflows/bazel-sdv-app.yml.
+build:remote-cache --remote_cache=grpc://localhost:9092
+build:remote-cache --remote_upload_local_results=true
+build:remote-cache --remote_local_fallback
 # Build-without-the-bytes: only fetch outputs that are actually needed,
 # which dramatically reduces network for large C++ trees.
 build:remote-cache --remote_download_minimal
+
+# ── Remote execution (cloud RBE, opt-in) ──────────────────────────────────
+# BuildBuddy remote execution + cache + build-results UI. Config-only until
+# activated: copy buildbuddy.bazelrc.example to user.bazelrc (git-ignored,
+# try-imported below) with a real API key. See
+# docs/bazel-build-system.md#remote-execution.
+build:remote-exec --remote_executor=grpcs://remote.buildbuddy.io
+build:remote-exec --remote_cache=grpcs://remote.buildbuddy.io
+build:remote-exec --bes_backend=grpcs://remote.buildbuddy.io
+build:remote-exec --bes_results_url=https://app.buildbuddy.io/invocation/
+build:remote-exec --remote_timeout=10m
+build:remote-exec --jobs=50
+build:remote-exec --remote_download_minimal
+# Execution platform provided by the BuildBuddy toolchain module (MODULE.bazel).
+build:remote-exec --host_platform=@toolchains_buildbuddy//platforms:linux_x86_64
+build:remote-exec --platforms=@toolchains_buildbuddy//platforms:linux_x86_64
+build:remote-exec --extra_execution_platforms=@toolchains_buildbuddy//platforms:linux_x86_64
 
 # ── Yocto cross-compilation profile ───────────────────────────────────────
 # Invoked as `bazel ... --config=yocto-cross`.  The Yocto recipe sources the
