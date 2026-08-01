@@ -1,0 +1,179 @@
+name: "SBOM & CVE Scan"
+
+# Generates a CycloneDX SBOM and a Yocto cve-check CVE report for the primary
+# image, and gates the run on unwaived CVEs at or above the severity
+# threshold (see docs/sbom-and-cve-workflow.md).
+#
+# Triggered after "Yocto Build" completes on main so the GHCR build image and
+# the downloads/sstate caches it produced already exist — this workflow does
+# not rebuild them. This also keeps a slow/flaky NVD feed from ever blocking
+# the core build pipeline.
+
+on:
+  workflow_run:
+    workflows: ["Yocto Build"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      image:
+        description: "BitBake image target"
+        required: false
+        default: "core-image-minimal"
+      severity_threshold:
+        description: "Minimum CVSS score that blocks the run"
+        required: false
+        default: "7.0"
+
+concurrency:
+  group: sbom-cve-scan-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE_TARGET: ${{ inputs.image || 'core-image-minimal' }}
+  MACHINE: qemux86-64
+  SEVERITY_THRESHOLD: ${{ inputs.severity_threshold || '7.0' }}
+
+jobs:
+  sbom-and-cve-scan:
+    # Skip if the upstream Yocto Build run failed — there is no fresh image
+    # to scan. Manual dispatch always runs.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      packages: read # to pull the GHCR build image
+
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf \
+            /opt/hostedtoolcache/CodeQL \
+            /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk \
+            /opt/hostedtoolcache/Ruby \
+            /usr/local/lib/android \
+            /usr/share/dotnet \
+            /usr/share/swift \
+            /usr/local/share/boost \
+            /usr/lib/jvm
+          df -h /
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Capture submodule revision hash
+        id: sub-hash
+        run: |
+          echo "rev=$(git submodule status | awk '{print $1}' | sort | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+
+      - name: Compute cache month
+        # NVD feed cache key rotates monthly so the database refreshes
+        # periodically instead of growing stale forever.
+        id: date
+        run: echo "yyyymm=$(date -u +%Y%m)" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Restore Yocto downloads cache
+        # Read-only reuse of the cache the Yocto Build workflow just saved.
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/yocto/downloads
+          key: yocto-dl-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('conf/**') }}
+          restore-keys: |
+            yocto-dl-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-
+            yocto-dl-${{ runner.os }}-
+
+      - name: Restore NVD CVE database cache
+        # Cached separately from the downloads cache above (monthly key)
+        # since the NVD feed changes independently of source/layer pins and
+        # would otherwise be re-downloaded on every run.
+        uses: actions/cache@v4
+        with:
+          path: .cache/yocto/downloads/CVE_CHECK
+          key: yocto-cve-db-${{ runner.os }}-${{ steps.date.outputs.yyyymm }}
+          restore-keys: |
+            yocto-cve-db-${{ runner.os }}-
+
+      - name: Restore upstream sstate cache (poky / meta-oe)
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/yocto/sstate-cache
+          key: yocto-sstate-upstream-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('conf/**') }}
+          restore-keys: |
+            yocto-sstate-upstream-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-
+            yocto-sstate-upstream-${{ runner.os }}-
+
+      - name: Restore meta-portfolio sstate cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/yocto/sstate-cache
+          key: yocto-sstate-meta-portfolio-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('layers/meta-portfolio/**/*.bb', 'layers/meta-portfolio/**/*.bbappend', 'layers/meta-portfolio/**/*.bbclass') }}
+          restore-keys: |
+            yocto-sstate-meta-portfolio-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-
+            yocto-sstate-meta-portfolio-${{ runner.os }}-
+
+      - name: Restore meta-security sstate cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/yocto/sstate-cache
+          key: yocto-sstate-meta-security-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('layers/meta-security/**/*.bb', 'layers/meta-security/**/*.bbappend', 'layers/meta-security/**/*.bbclass') }}
+          restore-keys: |
+            yocto-sstate-meta-security-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-
+            yocto-sstate-meta-security-${{ runner.os }}-
+
+      - name: Restore meta-ota sstate cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/yocto/sstate-cache
+          key: yocto-sstate-meta-ota-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('layers/meta-ota/**/*.bb', 'layers/meta-ota/**/*.bbappend', 'layers/meta-ota/**/*.bbclass') }}
+          restore-keys: |
+            yocto-sstate-meta-ota-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-
+            yocto-sstate-meta-ota-${{ runner.os }}-
+
+      - name: Initialize submodules
+        run: git submodule update --init --recursive
+
+      - name: Build image with cve-check enabled
+        # Reuses the same GHCR image and build contract as the main Yocto
+        # Build workflow. Most tasks hit sstate; only do_cve_check (plus
+        # do_rootfs re-run) execute fresh.
+        env:
+          YOCTO_CENTRAL_CACHE_RSYNC: ${{ secrets.YOCTO_CENTRAL_CACHE_RSYNC }}
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            --env HOME=/workspace \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            --workdir /workspace \
+            --env BOOTSTRAP_PACKAGES=false \
+            --env IMAGE_TARGET="$IMAGE_TARGET" \
+            --env CLEAN_BUILD=false \
+            --env ENABLE_CVE_CHECK=true \
+            --env YOCTO_CENTRAL_CACHE_RSYNC="${YOCTO_CENTRAL_CACHE_RSYNC:-}" \
+            ghcr.io/${{ github.repository_owner }}/yocto-build-env:latest \
+            bash scripts/remote-build.sh "$IMAGE_TARGET" false
+
+      - name: Generate SBOM and CVE triage report
+        env:
+          CVE_SEVERITY_THRESHOLD: ${{ env.SEVERITY_THRESHOLD }}
+        run: |
+          set -euo pipefail
+          chmod +x scripts/sbom/generate-sbom-report.sh
+          ./scripts/sbom/generate-sbom-report.sh "$IMAGE_TARGET" "$MACHINE"
+
+      - name: Upload SBOM and CVE artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-cve-report-${{ github.run_number }}
+          path: out/sbom
+          if-no-files-found: warn

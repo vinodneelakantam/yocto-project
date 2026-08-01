@@ -6,3 +6,7 @@
 	path = sources/meta-openembedded
 	url = https://github.com/openembedded/meta-openembedded.git
 	branch = scarthgap
+[submodule "layers/meta-raspberrypi"]
+	path = layers/meta-raspberrypi
+	url = https://github.com/agherzan/meta-raspberrypi.git
+	branch = master
