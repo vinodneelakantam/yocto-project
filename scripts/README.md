@@ -13,6 +13,7 @@ Detailed docs site: https://vinodneelakantam.github.io/yocto-project/
 | `bootstrap-worker-packages.sh` | Installs host packages required for Yocto and Bazel flows | New machine preparation |
 | `devcontainer-sanity-check.sh` | Validates required host tools before build | Early failure detection |
 | `cache-sync-daemon.sh` | Long-running cache sync helper for shared caches | Optional advanced setup |
+| `generate-bitbake-artifacts.sh` | Generates taskexp-related dependency artifacts and Python cooker-log visualization bundle | Post-build analysis bundle |
 
 ## Documentation Scripts
 
@@ -20,6 +21,7 @@ Detailed docs site: https://vinodneelakantam.github.io/yocto-project/
 |---|---|
 | `build-docs-html.sh` | Builds consolidated docs HTML artifact |
 | `render-docs-html.py` | Internal markdown-to-HTML renderer |
+| `visualize-bitbake-log.py` | Parses cooker logs into task/recipe/stage CSV + HTML dashboard and optionally renders dependency DOT files to SVG |
 
 ## GitHub Automation Scripts
 
@@ -47,6 +49,8 @@ Detailed docs site: https://vinodneelakantam.github.io/yocto-project/
 
 - Ensure submodules are initialized before running build scripts.
 - `BOOTSTRAP_PACKAGES=false` disables package bootstrap in `local-build.sh`.
+- `VISUALIZE_BUILD_LOGS=false` disables post-build cooker-log visualization in
+  `local-build.sh`.
 - Set `YOCTO_CENTRAL_CACHE_RSYNC=<user>@<host>:/srv/yocto-cache` to enable
   shared `downloads` and `sstate-cache` synchronization.
 - `gh` is required for workflow automation and optional cache-seeding behavior.

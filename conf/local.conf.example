@@ -13,6 +13,8 @@ PARALLEL_MAKE ?= "-j ${@oe.utils.cpu_count()}"
 PACKAGE_CLASSES ?= "package_rpm"
 EXTRA_IMAGE_FEATURES ?= "debug-tweaks"
 USER_CLASSES ?= "buildstats"
+# For stage-level timing summary after each build, you can also enable:
+INHERIT += "buildstats-summary"
 PATCHRESOLVE = "noop"
 
 BB_DISKMON_DIRS ??= "\

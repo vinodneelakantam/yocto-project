@@ -39,8 +39,10 @@ bazel test //apps/sdv-vehicle-service/...
 | If you need... | Read |
 |---|---|
 | Current architecture and roadmap boundaries | `docs/architecture.md` |
+| Single contributor starting point | `docs/contributor-journey.md` |
 | Day-1 contributor setup | `docs/onboarding-checklist.md` |
 | Local build operation and troubleshooting | `docs/local-build.md` |
+| BitBake log visualization (tasks, recipes, stages) | `docs/bitbake-log-visualization.md` |
 | Yocto image outputs and artifact meanings | `docs/image-output-artifacts.md` |
 | Repository standards and change rules | `docs/repo-conventions.md` |
 | Security and OTA posture (current vs planned) | `docs/security-and-ota.md` |

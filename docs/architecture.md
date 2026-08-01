@@ -62,6 +62,7 @@ Optional central rsync cache can be enabled for local/Codespace reuse through
 ## Diagram References
 
 See `docs/diagram-gallery.md` for all visuals with inline previews.
+For a unified contributor workflow, also see `docs/contributor-journey.md`.
 
 Primary diagram assets:
 - `docs/diagrams/architecture-overview.png`

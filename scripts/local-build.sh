@@ -2,7 +2,7 @@
 set -euo pipefail
 
 IMAGE_TARGET="${1:-core-image-minimal}"
-CLEAN_BUILD="${2:-false}"
+CLEAN_BUILD="${2:-true}"
 BOOTSTRAP_PACKAGES="${BOOTSTRAP_PACKAGES:-true}"
 BOOTSTRAP_RAN="false"
 
@@ -46,6 +46,22 @@ echo "[local-build] Starting Yocto build..."
 BOOTSTRAP_PACKAGES=false ./scripts/remote-build.sh "$IMAGE_TARGET" "$CLEAN_BUILD"
 
 echo "[local-build] Build finished."
+
+VISUALIZE_BUILD_LOGS="${VISUALIZE_BUILD_LOGS:-true}"
+if [[ "$VISUALIZE_BUILD_LOGS" == "true" ]]; then
+  if [[ -x scripts/generate-bitbake-artifacts.sh ]]; then
+    echo "[local-build] Generating BitBake artifact bundle (taskexp graphs + log visualization)..."
+    if _ARTIFACT_OUTPUT="$(./scripts/generate-bitbake-artifacts.sh "$IMAGE_TARGET" 2>&1)"; then
+      echo "$_ARTIFACT_OUTPUT" | tail -n 1
+    else
+      echo "[local-build] WARNING: BitBake artifact bundle generation failed (continuing)."
+    fi
+  else
+    echo "[local-build] SKIP artifact bundle: scripts/generate-bitbake-artifacts.sh not executable."
+  fi
+else
+  echo "[local-build] BitBake artifact bundle skipped (VISUALIZE_BUILD_LOGS=false)."
+fi
 
 # ── GitHub Actions cache seed ─────────────────────────────────────────────
 # After a successful local build, trigger the seed-cache-from-codespace
