@@ -12,6 +12,7 @@ cd "$ROOT_DIR"
 echo "[local-build] Root directory: $ROOT_DIR"
 echo "[local-build] Image target: $IMAGE_TARGET"
 echo "[local-build] Clean build: $CLEAN_BUILD"
+echo "[local-build] Build variant: ${BUILD_VARIANT:-<none, uses local.conf DISTRO>}"
 echo "[local-build] Bootstrap packages: $BOOTSTRAP_PACKAGES"
 
 echo "[local-build] Initializing submodules..."

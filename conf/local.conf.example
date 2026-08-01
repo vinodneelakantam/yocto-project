@@ -25,6 +25,16 @@ BB_DISKMON_DIRS ??= "\
     HALT,${DL_DIR},100M,1K \
     HALT,${SSTATE_DIR},100M,1K"
 
+# ── SBOM / CVE scan (opt-in) ────────────────────────────────────────────────
+# SPDX SBOM generation is already enabled by default via poky.conf
+# (INHERIT += "create-spdx"). CVE scanning is opt-in because it
+# downloads/refreshes the NVD database on first run. Prefer setting
+# ENABLE_CVE_CHECK=true when invoking scripts/remote-build.sh /
+# scripts/local-build.sh over uncommenting this directly, so local.conf stays
+# generated rather than hand-edited. See docs/sbom-and-cve-workflow.md.
+#
+# INHERIT += "cve-check"
+
 # ── SDV Bazel application (layers/meta-sdv) ─────────────────────────────────
 # Pull the Bazel-built SDV vehicle-signal service into the image.  Uncomment to
 # install it (requires meta-sdv in bblayers.conf and systemd in the image; the

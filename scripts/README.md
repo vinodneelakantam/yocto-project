@@ -15,6 +15,16 @@ Detailed docs site: https://vinodneelakantam.github.io/yocto-project/
 | `cache-sync-daemon.sh` | Long-running cache sync helper for shared caches | Optional advanced setup |
 | `generate-bitbake-artifacts.sh` | Generates taskexp-related dependency artifacts and Python cooker-log visualization bundle | Post-build analysis bundle |
 
+## SBOM & CVE Scripts
+
+| Script | Purpose |
+|---|---|
+| `sbom/generate-sbom-report.sh` | Orchestrates SBOM + CVE report generation from a completed build's `out/images/` output |
+| `sbom/spdx-to-cyclonedx.py` | Converts a Yocto `create-spdx` image bundle into a CycloneDX 1.5 SBOM |
+| `sbom/triage-cves.py` | Gates a release on unwaived CVEs at/above a severity threshold, using `sbom/cve-waivers.json` |
+
+See `docs/sbom-and-cve-workflow.md` for the full pipeline.
+
 ## Documentation Scripts
 
 | Script | Purpose |

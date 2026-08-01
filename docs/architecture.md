@@ -25,6 +25,38 @@ Core boundary:
 - Add signing, verification, and release promotion checkpoints.
 - Mature OTA lifecycle documentation into enforceable release gates.
 
+## Build Variants (Debug / Release / Secure)
+
+Three DISTRO variants live in `layers/meta-portfolio/conf/distro/` and select
+progressively hardened, non-overlapping feature sets. `portfolio-release` is
+the baseline; `portfolio-secure` requires it directly.
+
+| Aspect | `portfolio-debug` | `portfolio-release` | `portfolio-secure` |
+|---|---|---|---|
+| Root shell / empty root password | Yes (`debug-tweaks`) | No | No |
+| `strace`/`gdb` (`tools-debug`) | Yes | No | No |
+| `-dbg` packages / ptest | Yes | No | No |
+| Debug symbol stripping | Disabled | Enabled | Enabled |
+| Root filesystem | Read-write | Read-write | Read-only (`read-only-rootfs`) |
+| PAM | Default | Default | Enabled (`DISTRO_FEATURES += "pam"`) |
+| Hardening packagegroup (`layers/meta-security`) | No | No | Yes, installed by default |
+
+Select a variant per build without editing `local.conf` by hand:
+
+```bash
+BUILD_VARIANT=secure ./scripts/local-build.sh core-image-minimal false
+```
+
+`BUILD_VARIANT` is validated in [scripts/remote-build.sh](../scripts/remote-build.sh)
+(`debug`/`release`/`secure` only), overrides `DISTRO` to `portfolio-<variant>`,
+and stages output under `out/<variant>/` instead of `out/`. Leaving it unset
+preserves the existing single-variant behavior and `DISTRO` from `local.conf`.
+
+CI builds all three in one pass via the opt-in `variant-matrix-build` job in
+[.github/workflows/remote-yocto-build.yml](../.github/workflows/remote-yocto-build.yml)
+(manual dispatch with `build_all_variants: true`); pushes to `main` keep
+building the single default image to preserve the fast inner loop.
+
 ## Build Flow
 
 Primary remote flow:

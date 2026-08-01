@@ -18,6 +18,15 @@ on:
         type: boolean
         required: false
         default: false
+      variant:
+        description: "Build variant override for the primary build (debug, release, secure). Leave empty to keep local.conf's default DISTRO."
+        required: false
+        default: ""
+      build_all_variants:
+        description: "Also run the debug/release/secure matrix build (manual dispatch only, see docs/architecture.md)"
+        type: boolean
+        required: false
+        default: false
 
 # Only one Yocto build runs at a time on main.  If a new push arrives while
 # a build is already running, the in-flight run is cancelled so the latest
@@ -30,6 +39,7 @@ concurrency:
 env:
   IMAGE_TARGET: ${{ inputs.image || 'core-image-minimal' }}
   CLEAN_BUILD: ${{ inputs.clean || 'false' }}
+  BUILD_VARIANT: ${{ inputs.variant || '' }}
 
 jobs:
   # ─────────────────────────────────────────────────────────────────────────
@@ -359,6 +369,7 @@ jobs:
             --env BOOTSTRAP_PACKAGES=false \
             --env IMAGE_TARGET="$IMAGE_TARGET" \
             --env CLEAN_BUILD="$CLEAN_BUILD" \
+            --env BUILD_VARIANT="${BUILD_VARIANT:-}" \
             --env YOCTO_CENTRAL_CACHE_RSYNC="${YOCTO_CENTRAL_CACHE_RSYNC:-}" \
             ghcr.io/${{ github.repository_owner }}/yocto-build-env:latest \
             bash scripts/remote-build.sh "$IMAGE_TARGET" "$CLEAN_BUILD"
@@ -417,3 +428,110 @@ jobs:
           name: yocto-build-metrics-remote-${{ github.run_number }}
           path: out/build-summary.txt
           if-no-files-found: warn
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Job 3 — Multi-variant matrix build (debug/release/secure), opt-in.
+  #
+  # Only runs on manual dispatch with build_all_variants=true, so pushes to
+  # main keep building the single default image (fast inner loop). Each
+  # variant is a separate DISTRO (layers/meta-portfolio/conf/distro/) — see
+  # docs/architecture.md for the feature comparison.
+  # ─────────────────────────────────────────────────────────────────────────
+  variant-matrix-build:
+    needs: ensure-build-image
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_all_variants == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [debug, release, secure]
+    permissions:
+      contents: read
+      packages: read # to pull the GHCR image
+
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf \
+            /opt/hostedtoolcache/CodeQL \
+            /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk \
+            /opt/hostedtoolcache/Ruby \
+            /usr/local/lib/android \
+            /usr/share/dotnet \
+            /usr/share/swift \
+            /usr/local/share/boost \
+            /usr/lib/jvm
+          df -h /
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Capture submodule revision hash
+        id: sub-hash
+        run: |
+          echo "rev=$(git submodule status | awk '{print $1}' | sort | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Restore Yocto downloads cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/yocto/downloads
+          key: yocto-dl-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('conf/**') }}
+          restore-keys: |
+            yocto-dl-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-
+            yocto-dl-${{ runner.os }}-
+
+      - name: Restore ${{ matrix.variant }} sstate cache
+        # Keyed per variant since DISTRO/DISTRO_FEATURES differences change
+        # task signatures — falls back to the shared upstream cache so
+        # poky/meta-oe recipes unaffected by the variant still hit sstate.
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/yocto/sstate-cache
+          key: yocto-sstate-variant-${{ matrix.variant }}-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('conf/**', 'layers/meta-portfolio/conf/distro/**') }}
+          restore-keys: |
+            yocto-sstate-variant-${{ matrix.variant }}-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-
+            yocto-sstate-variant-${{ matrix.variant }}-${{ runner.os }}-
+            yocto-sstate-upstream-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-
+
+      - name: Initialize submodules
+        run: git submodule update --init --recursive
+
+      - name: Build ${{ matrix.variant }} variant inside GHCR container
+        env:
+          YOCTO_CENTRAL_CACHE_RSYNC: ${{ secrets.YOCTO_CENTRAL_CACHE_RSYNC }}
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            --env HOME=/workspace \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            --workdir /workspace \
+            --env BOOTSTRAP_PACKAGES=false \
+            --env IMAGE_TARGET="$IMAGE_TARGET" \
+            --env CLEAN_BUILD=false \
+            --env BUILD_VARIANT="${{ matrix.variant }}" \
+            --env YOCTO_CENTRAL_CACHE_RSYNC="${YOCTO_CENTRAL_CACHE_RSYNC:-}" \
+            ghcr.io/${{ github.repository_owner }}/yocto-build-env:latest \
+            bash scripts/remote-build.sh "$IMAGE_TARGET" false
+
+      - name: Save ${{ matrix.variant }} sstate cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/yocto/sstate-cache
+          key: yocto-sstate-variant-${{ matrix.variant }}-${{ runner.os }}-${{ steps.sub-hash.outputs.rev }}-${{ hashFiles('conf/**', 'layers/meta-portfolio/conf/distro/**') }}
+
+      - name: Upload ${{ matrix.variant }} artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: yocto-images-${{ matrix.variant }}-${{ github.run_number }}
+          path: out/${{ matrix.variant }}
+          if-no-files-found: error

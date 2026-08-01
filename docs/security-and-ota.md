@@ -10,6 +10,9 @@ planned for upcoming releases.
 - Submodules pin upstream source revisions for traceability.
 - Build scripts support reproducible execution through containerized tooling and
 	deterministic output staging.
+- Every build produces an SPDX SBOM (`create-spdx`, enabled by default) and is
+	converted to CycloneDX; CVE scanning (`cve-check`) is opt-in per build and
+	enforced as a release gate in CI. See `docs/sbom-and-cve-workflow.md`.
 
 ## Security Controls Planned Next
 

@@ -14,6 +14,21 @@ DL_DIR="$CACHE_ROOT/downloads"
 SSTATE_DIR="$CACHE_ROOT/sstate-cache"
 CENTRAL_CACHE_URI="${YOCTO_CENTRAL_CACHE_RSYNC:-}"
 
+# Multi-variant builds (debug/release/secure) — see docs/architecture.md and
+# layers/meta-portfolio/conf/distro/. Unset (default) leaves local.conf's
+# DISTRO untouched, preserving existing single-variant behavior.
+BUILD_VARIANT="${BUILD_VARIANT:-}"
+if [[ -n "$BUILD_VARIANT" ]]; then
+  case "$BUILD_VARIANT" in
+    debug|release|secure) ;;
+    *)
+      echo "ERROR: Unknown BUILD_VARIANT '$BUILD_VARIANT' (expected debug, release, or secure)"
+      exit 1
+      ;;
+  esac
+  OUT_DIR="$BUILD_ROOT/out/$BUILD_VARIANT"
+fi
+
 if [[ ! -f "$HOST_REQUIREMENTS_LIB" ]]; then
   echo "Missing host requirements library: $HOST_REQUIREMENTS_LIB"
   exit 1
@@ -115,6 +130,19 @@ if [[ -f "$LOCAL_CONF" ]]; then
   fi
   if ! grep -q '^PARALLEL_MAKE[[:space:]]*=' "$LOCAL_CONF"; then
     printf 'PARALLEL_MAKE = "-j %s"\n' "$_NCPUS" >> "$LOCAL_CONF"
+  fi
+
+  # Opt-in CVE scan (see docs/sbom-and-cve-workflow.md). Off by default since
+  # it downloads/refreshes the NVD database on first run.
+  if [[ "${ENABLE_CVE_CHECK:-false}" == "true" ]] && ! grep -q 'INHERIT.*cve-check' "$LOCAL_CONF"; then
+    printf 'INHERIT += "cve-check"\n' >> "$LOCAL_CONF"
+  fi
+
+  # Multi-variant override: select portfolio-debug/-release/-secure instead
+  # of whatever DISTRO local.conf sets (see docs/architecture.md).
+  if [[ -n "$BUILD_VARIANT" ]]; then
+    sed -i '/^DISTRO[[:space:]]/d' "$LOCAL_CONF"
+    printf 'DISTRO = "portfolio-%s"\n' "$BUILD_VARIANT" >> "$LOCAL_CONF"
   fi
 fi
 

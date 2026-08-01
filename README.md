@@ -46,6 +46,8 @@ bazel test //apps/sdv-vehicle-service/...
 | Yocto image outputs and artifact meanings | `docs/image-output-artifacts.md` |
 | Repository standards and change rules | `docs/repo-conventions.md` |
 | Security and OTA posture (current vs planned) | `docs/security-and-ota.md` |
+| SBOM generation and CVE triage pipeline | `docs/sbom-and-cve-workflow.md` |
+| Prioritized roadmap to close resume/portfolio gaps | `docs/resume-gap-roadmap.md` |
 | SDV Bazel + Yocto integration details | `docs/sdv-bazel-app.md` |
 | Visual diagrams and pipeline flow | `docs/diagram-gallery.md` |
 
