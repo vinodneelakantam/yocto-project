@@ -1,0 +1,30 @@
+# Local Bazel remote cache (gRPC + HTTP), for the SDV Bazel builds in this
+# repository.
+#
+# This is a self-hosted 4th cache tier, alongside the existing Yocto cache
+# layers (container layers, downloads, sstate) — see docs/bazel-build-system.md.
+#
+# Start:  scripts/bazel-remote-cache.sh up
+# Stop:   scripts/bazel-remote-cache.sh down
+# Build:  bazel build --config=remote-cache //apps/...
+#
+# CI runs an equivalent service container — see
+# .github/workflows/bazel-sdv-app.yml.
+services:
+  bazel-remote:
+    image: buchgr/bazel-remote-cache:v2.4.3
+    container_name: bazel-remote-cache
+    restart: unless-stopped
+    command:
+      - --max_size=5
+      - --dir=/data
+      - --grpc_address=0.0.0.0:9092
+      - --http_address=0.0.0.0:9090
+    ports:
+      - "9092:9092" # gRPC — consumed by --remote_cache=grpc://localhost:9092
+      - "9090:9090" # HTTP status/metrics page: http://localhost:9090/status
+    volumes:
+      - bazel-remote-data:/data
+
+volumes:
+  bazel-remote-data:

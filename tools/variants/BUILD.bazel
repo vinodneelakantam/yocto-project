@@ -1,0 +1,41 @@
+# Bazel-level build-variant management.
+#
+# Mirrors the Yocto DISTRO variants in layers/meta-portfolio/conf/distro/
+# (portfolio-debug / portfolio-release / portfolio-secure) but as a native
+# Bazel build setting, so the *inner loop* (bazel build/test) and the *outer
+# loop* (BitBake image build) select the same debug/release/secure axis
+# instead of only Yocto knowing about it. See docs/bazel-build-system.md.
+#
+# Select with:
+#   bazel build --//tools/variants:build_variant=secure //...
+# or via the convenience aliases in .bazelrc:
+#   bazel build --config=secure //...
+
+load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
+
+package(default_visibility = ["//visibility:public"])
+
+string_flag(
+    name = "build_variant",
+    build_setting_default = "release",
+    values = [
+        "debug",
+        "release",
+        "secure",
+    ],
+)
+
+config_setting(
+    name = "debug",
+    flag_values = {":build_variant": "debug"},
+)
+
+config_setting(
+    name = "release",
+    flag_values = {":build_variant": "release"},
+)
+
+config_setting(
+    name = "secure",
+    flag_values = {":build_variant": "secure"},
+)

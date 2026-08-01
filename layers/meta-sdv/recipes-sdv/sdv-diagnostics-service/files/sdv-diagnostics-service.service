@@ -1,0 +1,12 @@
+[Unit]
+Description=SDV diagnostics service (Bazel C++ demo)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/sdv-diagnostics-service
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

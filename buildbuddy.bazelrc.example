@@ -1,0 +1,14 @@
+# Copy this file to user.bazelrc (already git-ignored and try-imported by
+# .bazelrc) and fill in a real BuildBuddy API key to activate cloud remote
+# execution / remote cache / build-results UI:
+#
+#   cp buildbuddy.bazelrc.example user.bazelrc
+#
+# Get a key from https://app.buildbuddy.io/ (Settings > API Keys). Never
+# commit a real key — user.bazelrc is git-ignored for this reason.
+#
+# Then build/test remotely with:
+#   bazel build --config=remote-exec //apps/...
+#   bazel test  --config=remote-exec //apps/...
+
+build:remote-exec --remote_header=x-buildbuddy-api-key=YOUR_API_KEY_HERE

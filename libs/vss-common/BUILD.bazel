@@ -1,0 +1,45 @@
+# Shared VSS-style signal store — reused by every independently-built SDV
+# service under apps/ (sdv-vehicle-service, sdv-diagnostics-service, ...).
+#
+# Keeping it in its own package is the "clear partition + reuse" half of the
+# Bazel backbone: each app is still an independently buildable/testable unit
+# (`bazel build //apps/<service>/...`), but they share one implementation
+# instead of forking it. See docs/bazel-build-system.md.
+
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "signal_store",
+    srcs = ["signal_store.cc"],
+    hdrs = ["signal_store.h"],
+    # Bazel-level variant management (debug/release/secure), mirroring the
+    # Yocto DISTRO variants in layers/meta-portfolio. Select with
+    # `--//tools/variants:build_variant=<value>` or `--config=<value>`.
+    copts = select({
+        "//tools/variants:secure": [
+            "-D_FORTIFY_SOURCE=2",
+            "-fstack-protector-strong",
+            "-DSDV_HARDENED=1",
+        ],
+        "//tools/variants:debug": ["-DSDV_VERBOSE_LOGGING=1"],
+        "//conditions:default": [],
+    }),
+    linkopts = select({
+        "//tools/variants:secure": [
+            "-Wl,-z,relro",
+            "-Wl,-z,now",
+            "-Wl,-z,noexecstack",
+        ],
+        "//conditions:default": [],
+    }),
+    strip_include_prefix = "/libs/vss-common",
+)
+
+cc_test(
+    name = "signal_store_test",
+    size = "small",
+    srcs = ["signal_store_test.cc"],
+    deps = [":signal_store"],
+)

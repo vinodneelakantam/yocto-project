@@ -1,0 +1,36 @@
+# SDV diagnostics service — a second, independent Bazel-built application that
+# reuses //libs/vss-common instead of forking it. Demonstrates the "clear
+# partition, better reuse" side of the Bazel backbone: this app builds and
+# tests on its own (`bazel build //apps/sdv-diagnostics-service/...`) but
+# shares its signal model with //apps/sdv-vehicle-service. See
+# docs/bazel-build-system.md.
+
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
+
+package(default_visibility = ["//visibility:public"])
+
+# ── Pure diagnostic threshold rules (independently unit-tested) ───────────
+cc_library(
+    name = "diagnostics_rules",
+    srcs = ["src/diagnostics_rules.cc"],
+    hdrs = ["src/diagnostics_rules.h"],
+    strip_include_prefix = "/apps/sdv-diagnostics-service",
+    deps = ["//libs/vss-common:signal_store"],
+)
+
+cc_test(
+    name = "diagnostics_rules_test",
+    size = "small",
+    srcs = ["test/diagnostics_rules_test.cc"],
+    deps = [":diagnostics_rules"],
+)
+
+# ── C++ service binary ─────────────────────────────────────────────────────
+cc_binary(
+    name = "sdv-diagnostics-service",
+    srcs = ["src/main.cc"],
+    deps = [
+        ":diagnostics_rules",
+        "//libs/vss-common:signal_store",
+    ],
+)
