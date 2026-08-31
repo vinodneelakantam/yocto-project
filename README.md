@@ -1,5 +1,9 @@
 # Yocto Build Control Repository
 
+![Python](https://img.shields.io/badge/Python-3-3776AB?logo=python&logoColor=white)
+![Yocto Project](https://img.shields.io/badge/Yocto%20Project-scarthgap-3E863C?logo=yoctoproject&logoColor=white)
+![Linux](https://img.shields.io/badge/Linux-embedded-FCC624?logo=linux&logoColor=black)
+
 This repository is the control plane for a Yocto-based build platform.
 
 What it does now:
@@ -7,6 +11,7 @@ What it does now:
 - Maintains project-specific Yocto layers and config templates.
 - Hosts an SDV sample application built with Bazel and packaged through Yocto.
 - Publishes build artifacts and documentation from CI.
+- Uses Python helper scripts (`scripts/*.py`) for BitBake log visualization, docs rendering, and SBOM/CVE triage.
 
 What it is moving toward:
 - Multi-backend worker execution (GitHub-hosted, Codespace, and cloud spot workers).
@@ -14,6 +19,11 @@ What it is moving toward:
 - OTA-ready release lifecycle with rollback safety.
 
 ## Quick Start
+
+Prerequisites: a Linux host with sufficient CPU/RAM/disk for Yocto, plus Git,
+Python 3, and the standard BitBake host packages (see
+`scripts/lib/host-requirements.sh`; `scripts/local-build.sh` can auto-install
+them).
 
 1. Clone with submodules.
 
